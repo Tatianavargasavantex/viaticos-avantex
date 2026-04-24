@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Viáticos 2026 — Grupo Avantex</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;color:#111;font-size:14px}
+:root{
+  --navy:#002B5C;--navy2:#003D82;--navyL:#E8EFF8;--navyXL:#F4F7FC;
+  --white:#fff;--g50:#F8F9FA;--g100:#F0F2F5;--g200:#E5E9EF;--g400:#9CA3AF;--g600:#6B7280;--g900:#111827;
+  --border:#DDE3ED;--accent:#0066CC;
+  --green:#15803D;--greenL:#F0FDF4;--amber:#B45309;--amberL:#FFFBEB;--red:#DC2626;--redL:#FEF2F2;
+}
+.app{display:flex;min-height:100vh}
+.sidebar{width:230px;background:var(--navy);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:10}
+.main{margin-left:230px;flex:1}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}
+.content{padding:24px 28px}
+.sb-head{padding:20px 18px 14px;border-bottom:1px solid rgba(255,255,255,0.1)}
+.logo-wrap{display:flex;align-items:center;gap:10px}
+.logo-box{width:34px;height:34px;background:#fff;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-ax{font-size:14px;font-weight:800;color:var(--navy)}
+.logo-g{font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.5);text-transform:uppercase;display:block}
+.logo-n{font-size:17px;font-weight:700;color:#fff;display:block;line-height:1.2}
+.sb-mod{font-size:9px;color:rgba(255,255,255,0.35);letter-spacing:1.5px;text-transform:uppercase;margin-top:6px}
+.sb-nav{flex:1;padding:14px 10px}
+.sb-lbl{font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:1.5px;text-transform:uppercase;padding:0 8px;margin:12px 0 5px;display:block}
+.nb{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:1px;transition:all .15s;border:none;background:none;width:100%;text-align:left}
+.nb:hover{background:rgba(255,255,255,0.08);color:#fff}
+.nb.on{background:rgba(255,255,255,0.15);color:#fff;font-weight:500}
+.nd{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.25);flex-shrink:0}
+.nb.on .nd{background:#fff}
+.nbadge{margin-left:auto;background:rgba(239,68,68,0.3);color:#FCA5A5;font-size:10px;padding:1px 7px;border-radius:10px;font-weight:600}
+.sb-foot{padding:12px 10px;border-top:1px solid rgba(255,255,255,0.1)}
+.u-box{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.07);margin-bottom:7px}
+.av{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.18);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.un{font-size:12px;font-weight:500;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ur{font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px}
+.b-out{width:100%;padding:6px 8px;font-size:11px;color:rgba(255,255,255,0.4);background:none;border:none;border-radius:6px;cursor:pointer;text-align:left}
+.b-out:hover{background:rgba(220,38,38,0.2);color:#FCA5A5}
+/* Auth */
+.auth-sc{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--navy)}
+.auth-logo{text-align:center;margin-bottom:28px}
+.auth-icon{width:58px;height:58px;background:#fff;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px}
+.auth-ax{font-size:24px;font-weight:800;color:var(--navy)}
+.auth-g{font-size:10px;letter-spacing:3px;color:rgba(255,255,255,0.4);text-transform:uppercase}
+.auth-n{font-size:24px;font-weight:700;color:#fff;letter-spacing:.5px;margin-top:2px}
+.auth-card{background:#fff;border-radius:16px;padding:36px;width:380px}
+.auth-t{font-size:18px;font-weight:600;margin-bottom:3px}
+.auth-s{font-size:13px;color:var(--g600);margin-bottom:22px}
+.fl{font-size:12px;color:var(--g600);margin-bottom:5px;display:block;font-weight:500}
+.fi{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--g900);background:#fff;outline:none;transition:border .15s}
+.fi:focus{border-color:var(--navy)}
+.fg{margin-bottom:14px}
+.btn-login{width:100%;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.btn-login:hover{background:var(--navy2)}
+.btn-login:disabled{opacity:.5;cursor:not-allowed}
+.auth-ft{text-align:center;font-size:11px;color:rgba(255,255,255,0.3);margin-top:18px}
+/* Page */
+.pg-t{font-size:20px;font-weight:700;color:var(--g900)}
+.pg-s{font-size:13px;color:var(--g600);margin-top:3px;margin-bottom:20px}
+/* KPI */
+.kpig{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;top:0;left:0;width:3px;height:100%;background:var(--navy)}
+.kpi.acc::before{background:var(--accent)}.kpi.grn::before{background:var(--green)}
+.kpi.amb::before{background:var(--amber)}.kpi.red::before{background:var(--red)}
+.kl{font-size:11px;font-weight:500;color:var(--g600);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.kv{font-size:26px;font-weight:700;color:var(--g900);line-height:1}
+.ks{font-size:11px;color:var(--g400);margin-top:5px}
+/* Cards */
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.ct{font-size:13px;font-weight:600;color:var(--g900)}
+.cs{font-size:11px;color:var(--g400);margin-top:2px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+/* Tables */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:9px 14px;background:var(--navyXL);font-size:11px;font-weight:600;color:var(--navy);border-bottom:2px solid var(--navyL);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--g200);font-size:13px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--navyXL)}
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.badge::before{content:"";width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.bp{background:var(--amberL);color:var(--amber)}.bp::before{background:var(--amber)}
+.ba{background:var(--greenL);color:var(--green)}.ba::before{background:var(--green)}
+.br{background:var(--redL);color:var(--red)}.br::before{background:var(--red)}
+.bs{background:var(--navyL);color:var(--navy)}.bs::before{display:none}
+.bz{background:var(--g100);color:var(--g600)}.bz::before{display:none}
+/* Buttons */
+.btn{padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;background:#fff;color:var(--g900);font-size:13px;font-weight:500}
+.btn:hover{background:var(--g100)}
+.btn-n{background:var(--navy);color:#fff;border-color:var(--navy)}.btn-n:hover{background:var(--navy2)}
+.btn-g{background:var(--green);color:#fff;border-color:var(--green)}.btn-g:hover{opacity:.88}
+.btn-r{background:var(--red);color:#fff;border-color:var(--red)}.btn-r:hover{opacity:.88}
+.btn-sm{padding:5px 11px;font-size:12px}.btn-xs{padding:3px 8px;font-size:11px}
+/* Filters */
+.flt{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.fs,.fin{padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff;color:var(--g900);outline:none}
+.fs:focus,.fin:focus{border-color:var(--navy)}
+/* Progress */
+.prog{height:6px;background:var(--g200);border-radius:3px;overflow:hidden;min-width:70px;display:inline-block;vertical-align:middle}
+.pb{height:100%;border-radius:3px}
+.bok{background:#15803D}.bwn{background:#D97706}.bov{background:#DC2626}
+/* Form */
+.fr{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.fsec{font-size:10px;font-weight:600;color:var(--navy);letter-spacing:1px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--navyL)}
+/* Misc */
+.pos{color:var(--green);font-weight:600}.neg{color:var(--red);font-weight:600}
+.abar{background:var(--navyL);border:1.5px solid #BFDBFE;border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.notice{background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:14px;margin-bottom:14px;font-size:13px;color:#92400E}
+.empty{text-align:center;padding:40px;color:var(--g400);font-size:13px}
+.err-msg{background:#FEF2F2;border:1px solid #FECACA;color:var(--red);padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px}
+.ok-msg{background:var(--greenL);border:1px solid #BBF7D0;color:var(--green);padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px}
+.ldr{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:12px}
+.ring{width:36px;height:36px;border:3px solid var(--navyL);border-top-color:var(--navy);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const SB_URL='https://qyzlzfagdqkpczifnphd.supabase.co'
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5emx6ZmFnZHFrcGN6aWZucGhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MDA5NDEsImV4cCI6MjA5MjM3Njk0MX0.dRSGryVUK7aCIlUFP5wkj8put_Mkoc8mWZYd83Slzt4'
+const sb=supabase.createClient(SB_URL,SB_KEY)
+
+const ZONAS=['MATRIZ', 'CDMX', 'FORANEOS', 'SURESTE', 'BAJIO']
+const MESES=['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+const UDNS=['AROMATEX', 'PESTEX', 'AROMATEX/PESTEX', 'INTENDENCIA', 'WELDEX', 'AROMATEX HOME', 'AVANTEX', 'FLOTILLAS', 'EXTERNO']
+const CONCEPTOS=['COMBUSTIBLE', 'PEAJE Y ESTACIONAMIENTO', 'HOSPEDAJE', 'TRANSPORTACIONES', 'VIAJE', 'MATERIALES', 'CONSUMO', 'EPP', 'TELEFONOS', 'PAPELERIA', 'INSUMOS AROMATEX', 'INSUMOS PESTEX', 'MANTENIMIENTO DE AUTO', 'RENTA CARRO', 'UNIFORMES', 'OTROS GASTOS']
+const POL={MATRIZ:400,FORANEOS:400,SURESTE:300,BAJIO:300,CDMX:250}
+
+let S={
+  user:null,perfil:null,page:'resumen',
+  presupuestos:[],tecnicos:[],usuarios:[],banco:[],
+  loading:false,
+  f:{semana:'',mes:'',zona:'',estado:'',tecnico:''},
+  sel:new Set(),
+  afe:'PENDIENTE',afz:'',afb:'',afn:'',
+  f2:{zona:'',tecnico:''},
+  lineas:[],capMsg:null,
+  cap:{semana:1,mes:'ENERO',anio:2026,tipo:'PRESUPUESTADO',tid:'',nota:''},
+  zf:'',bf:'',
+  nu:{email:'',nombre:'',rol:'coordinador',zona:''},nuMsg:null,showNu:false,
+  tb:''
+}
+
+const fmt=n=>'$'+Math.round(n||0).toLocaleString('es-MX')
+const pct=(g,p)=>p?Math.round((g/p)*100):0
+const be=e=>{
+  const m={PENDIENTE:'bp',APROBADO:'ba',RECHAZADO:'br'}
+  const l={PENDIENTE:'Pendiente',APROBADO:'Aprobado',RECHAZADO:'Rechazado'}
+  return '<span class="badge '+(m[e]||'")>'+l[e]+'</span>'
+}
+const pbr=(g,p)=>{
+  const v=Math.min(pct(g,p),100)
+  const c=g>p?'bov':v>85?'bwn':'bok'
+  return '<div class="prog"><div class="pb '+c+'" style="width:'+v+'%"></div></div>'
+}
+
+async function loadAll(){
+  S.loading=true;render()
+  const[p,t,u,g]=await Promise.all([
+    sb.from('presupuestos').select('*').order('creado_en',{ascending:false}).limit(2000),
+    sb.from('tecnicos').select('*').eq('activo',true).order('nombre'),
+    sb.from('perfiles').select('*').order('nombre'),
+    sb.from('gastos_banco').select('*').order('creado_en',{ascending:false}).limit(2000),
+  ])
+  S.presupuestos=p.data||[]
+  S.tecnicos=t.data||[]
+  S.usuarios=u.data||[]
+  S.banco=g.data||[]
+  S.loading=false;render()
+}
+
+async function login(email,pass){
+  const{data,error}=await sb.auth.signInWithPassword({email,password:pass})
+  if(error)return error.message
+  S.user=data.user
+  const{data:p}=await sb.from('perfiles').select('*').eq('id',data.user.id).single()
+  S.perfil=p;await loadAll();return null
+}
+async function logout(){await sb.auth.signOut();S.user=null;S.perfil=null;S.page='resumen';render()}
+
+sb.auth.onAuthStateChange(async(e,session)=>{
+  if(session&&session.user&&!S.user){
+    S.user=session.user
+    const{data:p}=await sb.from('perfiles').select('*').eq('id',session.user.id).single()
+    S.perfil=p;await loadAll()
+  }
+})
+
+function fil(arr){
+  const f=S.f
+  return arr.filter(r=>
+    (!f.semana||String(r.semana)===f.semana)&&
+    (!f.mes||r.mes===f.mes)&&
+    (!f.zona||r.zona===f.zona)&&
+    (!f.estado||r.estado===f.estado)&&
+    (!f.tecnico||r.tecnico_nombre.toLowerCase().includes(f.tecnico.toLowerCase()))
+  )
+}
+
+async function setEstado(ids,accion,nota){
+  const arr=Array.isArray(ids)?ids:[ids]
+  for(const id of arr){
+    const upd={estado:accion}
+    const el=document.getElementById('me-'+id)
+    if(el&&accion==='APROBADO'){const v=parseFloat(el.value);if(v>0)upd.monto=v}
+    await sb.from('presupuestos').update(upd).eq('id',id)
+  }
+  const{data:{user}}=await sb.auth.getUser()
+  await sb.from('aprobaciones').insert(arr.map(id=>({
+    presupuesto_id:id,supervisor_id:user.id,
+    supervisor_nombre:S.perfil?S.perfil.nombre:'',
+    accion:accion,nota:nota||null
+  })))
+  S.sel=new Set();await loadAll()
+}
+
+async function delPres(id){
+  if(!confirm('Eliminar este registro?'))return
+  await sb.from('presupuestos').delete().eq('id',id);await loadAll()
+}
+
+function agregarLinea(){
+  const conc=document.getElementById('nl-conc').value
+  const monto=parseFloat(document.getElementById('nl-monto').value)
+  const lv=document.getElementById('nl-lv').value
+  if(!conc||!monto||monto<=0){alert('Ingresa concepto y monto');return}
+  S.lineas.push({concepto:conc,monto:monto,lv:lv})
+  document.getElementById('nl-monto').value=''
+  renderLineas()
+}
+
+function quitarLinea(i){S.lineas.splice(i,1);renderLineas()}
+
+function renderLineas(){
+  const total=S.lineas.reduce((a,l)=>a+l.monto,0)
+  const el=document.getElementById('lineas-wrap')
+  if(!el)return
+  if(S.lineas.length===0){
+    el.innerHTML='<p style="font-size:12px;color:var(--g400);text-align:center;padding:8px">Sin conceptos agregados</p>'
+  } else {
+    el.innerHTML='<table style="width:100%;border-collapse:collapse;margin-bottom:8px">'+
+      '<thead><tr style="background:var(--navyXL)"><th style="padding:6px 10px;font-size:11px;color:var(--navy);text-align:left">Concepto</th><th style="padding:6px 10px;font-size:11px;color:var(--navy);text-align:right">Monto</th><th style="padding:6px 10px;font-size:11px;color:var(--navy)">Tipo</th><th style="width:30px"></th></tr></thead><tbody>'+
+      S.lineas.map((l,i)=>'<tr style="border-top:1px solid var(--g200)"><td style="padding:6px 10px;font-size:12px">'+l.concepto+'</td><td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:600">'+fmt(l.monto)+'</td><td style="padding:6px 10px;font-size:11px;color:var(--g600)">'+l.lv+'</td><td style="padding:4px 6px"><button onclick="quitarLinea('+i+')" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:16px">✕</button></td></tr>').join('')+
+      '<tr style="border-top:2px solid var(--navyL);background:var(--navyXL)"><td style="padding:6px 10px;font-size:12px;font-weight:600">Total</td><td style="padding:6px 10px;font-size:13px;font-weight:700;text-align:right;color:var(--navy)">'+fmt(total)+'</td><td colspan="2"></td></tr>'+
+      '</tbody></table>'
+  }
+  const btn=document.getElementById('btn-guardar')
+  if(btn){
+    const ts=S.tecnicos.find(t=>t.id===S.cap.tid)
+    btn.disabled=!ts||S.lineas.length===0
+    btn.textContent='Guardar solicitud'+(S.lineas.length>0?' · '+fmt(total):'')
+  }
+}
+
+async function guardarPresupuesto(){
+  if(!S.cap.tid||S.lineas.length===0)return
+  const tec=S.tecnicos.find(t=>t.id===S.cap.tid)
+  const rows=S.lineas.map(l=>({
+    semana:parseInt(S.cap.semana),mes:S.cap.mes,anio:parseInt(S.cap.anio),
+    tipo:S.cap.tipo,tecnico_id:S.cap.tid,tecnico_nombre:tec.nombre,
+    zona:tec.zona,ciudad:tec.ciudad||'',udn:tec.udn||'',
+    concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
+    comentarios:S.cap.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE'
+  }))
+  const{error}=await sb.from('presupuestos').insert(rows)
+  if(error){S.capMsg={t:'e',m:error.message};render();return}
+  const total=S.lineas.reduce((a,l)=>a+l.monto,0)
+  S.capMsg={t:'o',m:rows.length+' concepto(s) guardados · Total: '+fmt(total)}
+  S.lineas=[];S.cap={...S.cap,tid:'',nota:''}
+  setTimeout(()=>{S.capMsg=null;render()},4000)
+  await loadAll()
+}
+
+function toggleNT(){
+  const f=document.getElementById('nt-form')
+  const b=document.getElementById('btn-nt')
+  if(!f)return
+  const show=f.style.display==='none'
+  f.style.display=show?'block':'none'
+  if(b)b.textContent=show?'✕ Cancelar':'+ Registrar técnico nuevo'
+}
+
+async function guardarNuevoTecnico(){
+  const nombre=document.getElementById('nt-nombre').value.trim().toUpperCase()
+  const zona=document.getElementById('nt-zona').value
+  const ciudad=document.getElementById('nt-ciudad').value.trim().toUpperCase()
+  const udn=document.getElementById('nt-udn').value
+  if(!nombre||!zona){alert('Ingresa nombre y zona');return}
+  const{data,error}=await sb.from('tecnicos').insert({nombre,zona,ciudad,udn,activo:true}).select().single()
+  if(error){alert('Error: '+error.message);return}
+  await loadAll()
+  S.cap.tid=data.id
+  document.getElementById('nt-form').style.display='none'
+  document.getElementById('btn-nt').textContent='+ Registrar técnico nuevo'
+  render()
+}
+
+async function setRol(id,rol){await sb.from('perfiles').update({rol}).eq('id',id);await loadAll()}
+
+async function crearUsuario(){
+  const u=S.nu
+  if(!u.email||!u.nombre){S.nuMsg={t:'e',m:'Completa email y nombre'};render();return}
+  const tmp='Avantex'+Math.random().toString(36).slice(-6)+'1!'
+  const{error}=await sb.auth.signUp({email:u.email,password:tmp,options:{data:{nombre:u.nombre,rol:u.rol,zona:u.zona||null}}})
+  if(error){S.nuMsg={t:'e',m:error.message};render();return}
+  S.nuMsg={t:'o',m:'Usuario creado. Contraseña temporal: '+tmp}
+  S.nu={email:'',nombre:'',rol:'coordinador',zona:''};S.showNu=false
+  setTimeout(()=>{S.nuMsg=null;render()},10000)
+  await loadAll()
+}
+
+// ── Sidebar ──
+function sidebar(){
+  const rol=S.perfil?S.perfil.rol:'coordinador'
+  const pend=S.presupuestos.filter(r=>r.estado==='PENDIENTE').length
+  const nav=[
+    {id:'resumen',l:'Resumen',r:['admin','coordinador','supervisor']},
+    {id:'captura',l:'Captura',r:['admin','coordinador']},
+    {id:'aprobacion',l:'Aprobación',r:['admin','supervisor'],b:pend},
+    {id:'comparativo',l:'Comparativo banco',r:['admin','supervisor']},
+    {id:'tecnicos',l:'Técnicos',r:['admin','coordinador','supervisor']},
+    {id:'usuarios',l:'Usuarios',r:['admin']},
+  ].filter(n=>n.r.includes(rol))
+  return '<aside class="sidebar">'+
+    '<div class="sb-head"><div class="logo-wrap"><div class="logo-box"><span class="logo-ax">AX</span></div>'+
+    '<div><span class="logo-g">Grupo</span><span class="logo-n">AVANTEX</span></div></div>'+
+    '<div class="sb-mod">Control de Viáticos</div></div>'+
+    '<nav class="sb-nav"><span class="sb-lbl">Módulos</span>'+
+    nav.map(n=>'<button class="nb '+(S.page===n.id?'on':'')+'" onclick="S.page=\''+n.id+'\';render()">'+
+      '<span class="nd"></span>'+n.l+(n.b?'<span class="nbadge">'+n.b+'</span>':'')+
+    '</button>').join('')+
+    '</nav>'+
+    '<div class="sb-foot">'+
+    '<div class="u-box"><div class="av">'+(S.perfil?S.perfil.nombre.charAt(0):'?')+'</div>'+
+    '<div><div class="un">'+(S.perfil?S.perfil.nombre:'Usuario')+'</div>'+
+    '<div class="ur">'+(S.perfil?S.perfil.rol:'')+' · '+(S.perfil?S.perfil.zona||'General':'')+'</div></div></div>'+
+    '<button class="b-out" onclick="logout()">Cerrar sesión</button>'+
+    '</div></aside>'
+}
+
+// ── Pages ──
+function pResumen(){
+  const data=fil(S.presupuestos)
+  const totP=data.reduce((a,r)=>a+r.monto,0)
+  const totG=S.banco.reduce((a,r)=>a+(r.monto||0),0)
+  const dif=totP-totG
+  const pend=data.filter(r=>r.estado==='PENDIENTE').length
+  const apro=data.filter(r=>r.estado==='APROBADO').length
+  const rech=data.filter(r=>r.estado==='RECHAZADO').length
+  const zonas={}
+  data.forEach(r=>{if(!zonas[r.zona])zonas[r.zona]={p:0,g:0};zonas[r.zona].p+=r.monto})
+  S.banco.forEach(r=>{if(r.zona&&zonas[r.zona])zonas[r.zona].g+=(r.monto||0)})
+  const concs={}
+  data.forEach(r=>{if(!concs[r.concepto])concs[r.concepto]={p:0,g:0};concs[r.concepto].p+=r.monto})
+  S.banco.forEach(r=>{if(r.concepto&&concs[r.concepto])concs[r.concepto].g+=(r.monto||0)})
+  const topC=Object.entries(concs).sort((a,b)=>b[1].p-a[1].p).slice(0,6)
+  const tecs={}
+  data.forEach(r=>{if(!tecs[r.tecnico_nombre])tecs[r.tecnico_nombre]={p:0,g:0,zona:r.zona,udn:r.udn||'',est:r.estado};tecs[r.tecnico_nombre].p+=r.monto})
+  S.banco.forEach(r=>{if(tecs[r.tecnico_nombre])tecs[r.tecnico_nombre].g+=(r.monto||0)})
+  const topT=Object.entries(tecs).sort((a,b)=>b[1].p-a[1].p).slice(0,10)
+
+  return '<div class="pg-t">Resumen ejecutivo</div>'+
+    '<div class="pg-s">Vista general · '+data.length+' registros</div>'+
+    '<div class="flt">'+
+    '<select class="fs" onchange="S.f.semana=this.value;render()"><option value="">Todas las semanas</option>'+
+    [1,2,3,4,5,6,7,8].map(s=>'<option value="'+s+'"'+(S.f.semana==s?' selected':'')+'>Semana '+s+'</option>').join('')+'</select>'+
+    '<select class="fs" onchange="S.f.mes=this.value;render()"><option value="">Todos los meses</option>'+
+    MESES.map(m=>'<option value="'+m+'"'+(S.f.mes===m?' selected':'')+'>'+m.charAt(0)+m.slice(1).toLowerCase()+'</option>').join('')+'</select>'+
+    '<select class="fs" onchange="S.f.zona=this.value;render()"><option value="">Todas las zonas</option>'+
+    ZONAS.map(z=>'<option value="'+z+'"'+(S.f.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select>'+
+    '</div>'+
+    '<div class="kpig">'+
+    '<div class="kpi acc"><div class="kl">Total presupuestado</div><div class="kv">'+fmt(totP)+'</div><div class="ks">'+data.length+' registros</div></div>'+
+    '<div class="kpi"><div class="kl">Total gastado</div><div class="kv">'+fmt(totG)+'</div><div class="ks">'+pct(totG,totP)+'% del presupuesto</div></div>'+
+    '<div class="kpi '+(dif>=0?'grn':'red')+'"><div class="kl">Diferencia</div><div class="kv '+(dif>=0?'pos':'neg')+'">'+(dif>=0?'+':'')+fmt(dif)+'</div><div class="ks">'+(dif>=0?'dentro de presupuesto':'excedido')+'</div></div>'+
+    '<div class="kpi amb"><div class="kl">Pendientes</div><div class="kv" style="color:var(--amber)">'+pend+'</div><div class="ks">por autorizar</div></div>'+
+    '</div>'+
+    '<div class="g2">'+
+    '<div class="card"><div class="ch"><div class="ct">Presupuesto vs gasto por zona</div></div>'+
+    '<table><thead><tr><th>Zona</th><th style="text-align:right">Presupuesto</th><th style="text-align:right">Gasto</th><th style="text-align:right">Diferencia</th><th>Avance</th></tr></thead><tbody>'+
+    Object.entries(zonas).sort((a,b)=>b[1].p-a[1].p).map(function(e){
+      var z=e[0],v=e[1],d=v.p-v.g
+      return '<tr><td><span class="badge bz">'+z+'</span></td>'+
+        '<td style="text-align:right;font-weight:600">'+fmt(v.p)+'</td>'+
+        '<td style="text-align:right">'+fmt(v.g)+'</td>'+
+        '<td style="text-align:right" class="'+(d>=0?'pos':'neg')+'">'+(d>=0?'+':'')+fmt(d)+'</td>'+
+        '<td>'+pbr(v.g,v.p)+'<span style="font-size:10px;color:var(--g400);margin-left:4px">'+pct(v.g,v.p)+'%</span></td></tr>'
+    }).join('')+'</tbody></table></div>'+
+    '<div class="card"><div class="ch"><div class="ct">Por concepto (top 6)</div></div>'+
+    '<table><thead><tr><th>Concepto</th><th style="text-align:right">Presupuesto</th><th style="text-align:right">Gasto</th><th style="text-align:right">Dif.</th></tr></thead><tbody>'+
+    topC.map(function(e){
+      var c=e[0],v=e[1],d=v.p-v.g
+      return '<tr><td style="font-size:12px">'+c+'</td>'+
+        '<td style="text-align:right;font-weight:600">'+fmt(v.p)+'</td>'+
+        '<td style="text-align:right">'+fmt(v.g)+'</td>'+
+        '<td style="text-align:right" class="'+(d>=0?'pos':'neg')+'">'+(d>=0?'+':'')+fmt(d)+'</td></tr>'
+    }).join('')+'</tbody></table></div></div>'+
+    '<div class="card"><div class="ch"><div class="ct">Top técnicos — presupuesto vs gasto</div></div>'+
+    '<table><thead><tr><th>Técnico</th><th>Zona</th><th style="text-align:right">Presupuesto</th><th style="text-align:right">Gasto</th><th style="text-align:right">Diferencia</th><th>Avance</th></tr></thead><tbody>'+
+    topT.map(function(e){
+      var n=e[0],v=e[1],d=v.p-v.g
+      return '<tr><td style="font-weight:600">'+n+'</td>'+
+        '<td><span class="badge bz">'+v.zona+'</span></td>'+
+        '<td style="text-align:right;font-weight:600">'+fmt(v.p)+'</td>'+
+        '<td style="text-align:right">'+fmt(v.g)+'</td>'+
+        '<td style="text-align:right" class="'+(d>=0?'pos':'neg')+'">'+(d>=0?'+':'')+fmt(d)+'</td>'+
+        '<td>'+pbr(v.g,v.p)+'<span style="font-size:10px;color:var(--g400);margin-left:4px">'+pct(v.g,v.p)+'%</span></td></tr>'
+    }).join('')+'</tbody></table></div>'
+}
+
+function pCaptura(){
+  const c=S.cap
+  const ts=S.tecnicos.find(t=>t.id===c.tid)
+  const tf=S.tecnicos.filter(t=>(!S.zf||t.zona===S.zf)&&(!S.bf||t.nombre.toLowerCase().includes(S.bf.toLowerCase())))
+  const regs=fil(S.presupuestos).slice(0,100)
+  const total=S.lineas.reduce((a,l)=>a+l.monto,0)
+
+  return '<div class="pg-t">Captura de presupuesto</div>'+
+    '<div class="pg-s">Registra el presupuesto semanal por técnico</div>'+
+    '<div style="display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start">'+
+    '<div class="card" style="margin:0">'+
+    '<div class="ct" style="margin-bottom:14px">Nuevo registro</div>'+
+    (S.capMsg?'<div class="'+(S.capMsg.t==='o'?'ok-msg':'err-msg')+'">'+S.capMsg.m+'</div>':'')+
+    '<div class="fsec">Periodo</div>'+
+    '<div class="fr">'+
+    '<div><label class="fl">Semana</label><input class="fi" type="number" min="1" max="53" value="'+c.semana+'" onchange="S.cap.semana=this.value"></div>'+
+    '<div><label class="fl">Mes</label><select class="fi" onchange="S.cap.mes=this.value">'+MESES.map(m=>'<option value="'+m+'"'+(c.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Tipo</label><select class="fi" onchange="S.cap.tipo=this.value"><option value="PRESUPUESTADO"'+(c.tipo==='PRESUPUESTADO'?' selected':'')+'>PRESUPUESTADO</option><option value="EXTRA"'+(c.tipo==='EXTRA'?' selected':'')+'>EXTRA</option></select></div>'+
+    '</div>'+
+    '<div class="fsec">Técnico</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Zona</label><select class="fi" onchange="S.zf=this.value;render()"><option value="">Todas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.zf===z?' selected':'')+'>'+z+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Buscar</label><input class="fi" placeholder="Nombre..." value="'+S.bf+'" onchange="S.bf=this.value;render()"></div>'+
+    '</div>'+
+    '<select class="fi" size="5" style="height:auto;margin-bottom:8px" onchange="S.cap.tid=this.value;render()">'+
+    '<option value="">— Selecciona un técnico —</option>'+
+    tf.map(t=>'<option value="'+t.id+'"'+(c.tid===t.id?' selected':'')+'>'+t.nombre+' · '+(t.ciudad||'')+'</option>').join('')+
+    '</select>'+
+    (ts?'<div style="padding:6px 10px;background:var(--navyL);border-radius:6px;font-size:11px;color:var(--navy);margin-bottom:8px"><strong>'+ts.nombre+'</strong> · '+ts.zona+' · '+(ts.udn||'')+' · '+(ts.ciudad||'')+'</div>':'')+
+    '<div style="margin-bottom:10px">'+
+    '<button class="btn" id="btn-nt" style="width:100%;font-size:12px;color:var(--navy);border-color:var(--navyL);background:var(--navyXL)" onclick="toggleNT()">+ Registrar técnico nuevo</button>'+
+    '<div id="nt-form" style="display:none;margin-top:8px;background:var(--g50);border:1px solid var(--border);border-radius:8px;padding:12px">'+
+    '<div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Nuevo técnico</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Nombre *</label><input class="fi" id="nt-nombre" placeholder="Ej. JUAN GARCIA"></div>'+
+    '<div><label class="fl">Zona *</label><select class="fi" id="nt-zona"><option value="">Selecciona...</option>'+ZONAS.map(z=>'<option>'+z+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Ciudad</label><input class="fi" id="nt-ciudad" placeholder="Ej. MONTERREY"></div>'+
+    '<div><label class="fl">UDN</label><select class="fi" id="nt-udn">'+UDNS.map(u=>'<option>'+u+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<button class="btn btn-n" style="width:100%" onclick="guardarNuevoTecnico()">Guardar técnico</button>'+
+    '</div></div>'+
+    '<div class="fsec">Conceptos del viaje</div>'+
+    '<div id="lineas-wrap" style="margin-bottom:10px"><p style="font-size:12px;color:var(--g400);text-align:center;padding:8px">Sin conceptos agregados</p></div>'+
+    '<div style="background:var(--g50);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">'+
+    '<div style="font-size:11px;font-weight:600;color:var(--g600);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Agregar concepto</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Concepto</label><select class="fi" id="nl-conc">'+CONCEPTOS.map(cc=>'<option>'+cc+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Tipo</label><select class="fi" id="nl-lv"><option>LOCAL</option><option>VIAJE</option></select></div>'+
+    '</div>'+
+    '<div class="fr2">'+
+    '<div><label class="fl">Monto ($MXN)</label><input class="fi" type="number" id="nl-monto" min="0" step="1" placeholder="0" style="font-size:15px;font-weight:600"></div>'+
+    '<div style="display:flex;align-items:flex-end"><button class="btn btn-n" style="width:100%;padding:9px" onclick="agregarLinea()">+ Agregar</button></div>'+
+    '</div></div>'+
+    '<div style="margin-bottom:10px"><label class="fl">Comentarios</label><input class="fi" placeholder="Opcional" value="'+(c.nota||'')+'" onchange="S.cap.nota=this.value"></div>'+
+    '<button class="btn btn-n" id="btn-guardar" style="width:100%;padding:11px;font-size:14px" onclick="guardarPresupuesto()" disabled>Guardar solicitud</button>'+
+    '</div>'+
+    '<div class="card" style="margin:0">'+
+    '<div class="ch"><div><div class="ct">Registros capturados</div><div class="cs">'+regs.length+' registros</div></div>'+
+    '<input class="fin" placeholder="Buscar técnico..." value="'+(S.f.tecnico||'')+'" onchange="S.f.tecnico=this.value;render()" style="width:180px">'+
+    '</div>'+
+    '<div class="tw"><table><thead><tr><th>Sem</th><th>Mes</th><th>Técnico</th><th>Zona</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th></th></tr></thead><tbody>'+
+    (regs.length?regs.map(r=>'<tr>'+
+      '<td><span class="badge bs">S'+r.semana+'</span></td>'+
+      '<td style="color:var(--g600);font-size:12px">'+r.mes+'</td>'+
+      '<td style="font-weight:600">'+r.tecnico_nombre+'</td>'+
+      '<td><span class="badge bz">'+r.zona+'</span></td>'+
+      '<td style="color:var(--g600);font-size:12px">'+r.concepto+'</td>'+
+      '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
+      '<td>'+be(r.estado)+'</td>'+
+      '<td>'+(r.estado==='PENDIENTE'?'<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="delPres(\''+r.id+'\')">✕</button>':'')+'</td>'+
+    '</tr>').join(''):'<tr><td colspan="8" class="empty">No hay registros aún</td></tr>')+
+    '</tbody></table></div></div></div>'
+}
+
+function pAprobacion(){
+  let data=S.presupuestos
+  if(S.afe)data=data.filter(r=>r.estado===S.afe)
+  if(S.afz)data=data.filter(r=>r.zona===S.afz)
+  if(S.afb)data=data.filter(r=>r.tecnico_nombre.toLowerCase().includes(S.afb.toLowerCase()))
+  const pend=S.presupuestos.filter(r=>r.estado==='PENDIENTE').length
+  const apro=S.presupuestos.filter(r=>r.estado==='APROBADO').length
+  const rech=S.presupuestos.filter(r=>r.estado==='RECHAZADO').length
+  const sel=S.sel
+  const totSel=Array.from(sel).reduce((a,id)=>{const r=S.presupuestos.find(r=>r.id===id);return a+(r?r.monto:0)},0)
+
+  return '<div class="pg-t">Aprobación de presupuestos</div>'+
+    '<div class="pg-s">Autoriza o rechaza registros de los coordinadores</div>'+
+    '<div class="g3">'+
+    '<div class="kpi amb"><div class="kl">Pendientes</div><div class="kv" style="color:var(--amber)">'+pend+'</div><div class="ks">requieren acción</div></div>'+
+    '<div class="kpi grn"><div class="kl">Aprobados</div><div class="kv" style="color:var(--green)">'+apro+'</div></div>'+
+    '<div class="kpi red"><div class="kl">Rechazados</div><div class="kv" style="color:var(--red)">'+rech+'</div></div>'+
+    '</div>'+
+    '<div class="flt">'+
+    '<select class="fs" onchange="S.afe=this.value;render()"><option value="">Todos</option><option value="PENDIENTE"'+(S.afe==='PENDIENTE'?' selected':'')+'>Pendientes</option><option value="APROBADO"'+(S.afe==='APROBADO'?' selected':'')+'>Aprobados</option><option value="RECHAZADO"'+(S.afe==='RECHAZADO'?' selected':'')+'>Rechazados</option></select>'+
+    '<select class="fs" onchange="S.afz=this.value;render()"><option value="">Todas las zonas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.afz===z?' selected':'')+'>'+z+'</option>').join('')+'</select>'+
+    '<input class="fin" placeholder="Buscar técnico..." value="'+(S.afb||'')+'" onchange="S.afb=this.value;render()">'+
+    '</div>'+
+    (sel.size>0?'<div class="abar">'+
+    '<span style="font-size:13px;color:var(--navy);font-weight:600">'+sel.size+' seleccionados · '+fmt(totSel)+'</span>'+
+    '<input class="fin" placeholder="Nota opcional..." id="nota-sel" style="flex:1;min-width:180px">'+
+    '<button class="btn btn-g btn-sm" onclick="setEstado(Array.from(S.sel),\'APROBADO\',document.getElementById(\'nota-sel\').value)">✓ Aprobar</button>'+
+    '<button class="btn btn-r btn-sm" onclick="setEstado(Array.from(S.sel),\'RECHAZADO\',document.getElementById(\'nota-sel\').value)">✕ Rechazar</button>'+
+    '</div>':'')+
+    '<div class="card" style="padding:0;overflow:hidden">'+
+    '<table><thead><tr>'+
+    '<th style="width:36px"><input type="checkbox" onchange="var ids=S.presupuestos.filter(r=>r.estado===\'PENDIENTE\').map(r=>r.id);S.sel=this.checked?new Set(ids):new Set();render()"></th>'+
+    '<th>Técnico</th><th>Zona</th><th>Concepto</th><th>Sem/Mes</th><th style="text-align:right">Monto solicitado</th><th style="text-align:right">Monto a aprobar</th><th>Estado</th><th>Acciones</th>'+
+    '</tr></thead><tbody>'+
+    (data.length?data.map(r=>'<tr>'+
+      '<td>'+(r.estado==='PENDIENTE'?'<input type="checkbox"'+(sel.has(r.id)?' checked':'')+' onchange="S.sel[this.checked?\'add\':\'delete\'](\''+r.id+'\');render()">':'')+'</td>'+
+      '<td style="font-weight:600">'+r.tecnico_nombre+'</td>'+
+      '<td><span class="badge bz">'+r.zona+'</span></td>'+
+      '<td style="font-size:12px;color:var(--g600)">'+r.concepto+'</td>'+
+      '<td><span class="badge bs">S'+r.semana+'</span> <span style="color:var(--g600);font-size:12px">'+r.mes+'</span></td>'+
+      '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
+      '<td style="text-align:right">'+(r.estado==='PENDIENTE'?'<input type="number" id="me-'+r.id+'" value="'+r.monto+'" min="0" step="1" style="width:90px;padding:3px 6px;border:1.5px solid #BFDBFE;border-radius:6px;font-size:12px;text-align:right;font-weight:600">':fmt(r.monto))+'</td>'+
+      '<td>'+be(r.estado)+'</td>'+
+      '<td>'+(r.estado==='PENDIENTE'?
+        '<button class="btn btn-xs" style="color:var(--green);border-color:#BBF7D0;margin-right:4px" onclick="setEstado(\''+r.id+'\',\'APROBADO\',\'\')">✓</button>'+
+        '<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="setEstado(\''+r.id+'\',\'RECHAZADO\',\'\')">✕</button>':
+        '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
+      '</td></tr>'
+    ).join(''):'<tr><td colspan="9" class="empty">Sin registros</td></tr>')+
+    '</tbody></table></div>'
+}
+
+function pComparativo(){
+  const pres=fil(S.presupuestos)
+  const map={}
+  pres.forEach(r=>{if(!map[r.tecnico_nombre])map[r.tecnico_nombre]={t:r.tecnico_nombre,z:r.zona,p:0,g:0};map[r.tecnico_nombre].p+=r.monto})
+  S.banco.forEach(r=>{if(map[r.tecnico_nombre])map[r.tecnico_nombre].g+=(r.monto||0)})
+  const rows=Object.values(map).sort((a,b)=>b.p-a.p)
+  const totP=rows.reduce((a,r)=>a+r.p,0)
+  const totG=rows.reduce((a,r)=>a+r.g,0)
+  const exc=rows.filter(r=>r.g>r.p).length
+  const rf=rows.filter(r=>(!S.f2.zona||r.z===S.f2.zona)&&(!S.f2.tecnico||r.t.toLowerCase().includes(S.f2.tecnico.toLowerCase())))
+
+  return '<div class="pg-t">Comparativo banco</div>'+
+    '<div class="pg-s">Presupuesto asignado vs gasto real del banco</div>'+
+    '<div class="kpig">'+
+    '<div class="kpi acc"><div class="kl">Total presupuestado</div><div class="kv">'+fmt(totP)+'</div></div>'+
+    '<div class="kpi"><div class="kl">Total gastado</div><div class="kv">'+fmt(totG)+'</div></div>'+
+    '<div class="kpi '+(totP>=totG?'grn':'red')+'"><div class="kl">Diferencia neta</div><div class="kv '+(totP>=totG?'pos':'neg')+'">'+(totP>=totG?'+':'')+fmt(totP-totG)+'</div></div>'+
+    '<div class="kpi '+(exc>0?'red':'grn')+'"><div class="kl">Técnicos excedidos</div><div class="kv" style="color:'+(exc>0?'var(--red)':'var(--green)')+'">'+exc+'</div></div>'+
+    '</div>'+
+    (S.banco.length===0?'<div class="notice"><strong>Sin datos del banco</strong> · Cuando tengas el reporte bancario, el administrador puede cargarlo para activar este comparativo.</div>':'')+
+    '<div class="card">'+
+    '<div class="ch"><div><div class="ct">Detalle por técnico</div><div class="cs">'+rf.length+' técnicos</div></div>'+
+    '<div class="flt" style="margin:0">'+
+    '<select class="fs" onchange="S.f2.zona=this.value;render()"><option value="">Todas las zonas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.f2.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select>'+
+    '<input class="fin" placeholder="Buscar..." value="'+(S.f2.tecnico||'')+'" onchange="S.f2.tecnico=this.value;render()">'+
+    '</div></div>'+
+    '<div class="tw"><table><thead><tr><th>Técnico</th><th>Zona</th><th style="text-align:right">Presupuesto</th><th style="text-align:right">Gasto banco</th><th style="text-align:right">Diferencia</th><th>Avance</th><th>Estado</th></tr></thead><tbody>'+
+    (rf.length?rf.map(function(r){
+      var d=r.p-r.g,p2=pct(r.g,r.p),over=r.g>r.p
+      var est=over?'<span class="badge br">Excedido</span>':p2>85?'<span class="badge bp">Alerta</span>':'<span class="badge ba">OK</span>'
+      return '<tr>'+
+        '<td style="font-weight:600">'+r.t+'</td>'+
+        '<td><span class="badge bz">'+r.z+'</span></td>'+
+        '<td style="text-align:right">'+fmt(r.p)+'</td>'+
+        '<td style="text-align:right">'+fmt(r.g)+'</td>'+
+        '<td style="text-align:right" class="'+(d>=0?'pos':'neg')+'">'+(d>=0?'+':'')+fmt(d)+'</td>'+
+        '<td>'+pbr(r.g,r.p)+'<span style="font-size:10px;color:var(--g400);margin-left:4px">'+p2+'%</span></td>'+
+        '<td>'+est+'</td></tr>'
+    }).join(''):'<tr><td colspan="7" class="empty">Sin presupuestos</td></tr>')+
+    '</tbody></table></div></div>'
+}
+
+function pTecnicos(){
+  const tf=S.tecnicos.filter(t=>
+    (!S.tb||t.nombre.toLowerCase().includes(S.tb.toLowerCase())||t.zona.toLowerCase().includes(S.tb.toLowerCase()))&&
+    (!S.f.zona||t.zona===S.f.zona)
+  )
+  return '<div class="pg-t">Catálogo de técnicos</div>'+
+    '<div class="pg-s">'+S.tecnicos.length+' técnicos registrados</div>'+
+    '<div class="flt">'+
+    '<input class="fin" placeholder="Buscar nombre o zona..." value="'+(S.tb||'')+'" onchange="S.tb=this.value;render()" style="width:240px">'+
+    '<select class="fs" onchange="S.f.zona=this.value;render()"><option value="">Todas las zonas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.f.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select>'+
+    '<span style="font-size:12px;color:var(--g600);font-weight:500">'+tf.length+' resultados</span>'+
+    '</div>'+
+    '<div class="card" style="padding:0;overflow:hidden">'+
+    '<table><thead><tr><th>Nombre</th><th>Zona</th><th>Ciudad</th><th>UDN</th><th>Estado</th></tr></thead><tbody>'+
+    (tf.length?tf.map(t=>'<tr><td style="font-weight:600">'+t.nombre+'</td><td><span class="badge bz">'+t.zona+'</span></td><td style="color:var(--g600)">'+t.ciudad+'</td><td style="color:var(--g600);font-size:12px">'+t.udn+'</td><td><span class="badge '+(t.activo?'ba':'br')+'">'+(t.activo?'Activo':'Inactivo')+'</span></td></tr>').join(''):'<tr><td colspan="5" class="empty">Sin técnicos</td></tr>')+
+    '</tbody></table></div>'
+}
+
+function pUsuarios(){
+  const u=S.nu
+  const rs={admin:'color:var(--navy);background:var(--navyL)',supervisor:'color:#6D28D9;background:#F5F3FF',coordinador:'color:var(--g600);background:var(--g100)'}
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">'+
+    '<div><div class="pg-t">Usuarios del sistema</div><div style="font-size:13px;color:var(--g600);margin-top:3px">Gestiona accesos, roles y zonas</div></div>'+
+    '<button class="btn btn-n" onclick="S.showNu=!S.showNu;render()">+ Nuevo usuario</button>'+
+    '</div>'+
+    (S.nuMsg?'<div class="'+(S.nuMsg.t==='o'?'ok-msg':'err-msg')+'" style="margin-bottom:16px">'+S.nuMsg.m+'</div>':'')+
+    (S.showNu?'<div class="card" style="margin-bottom:20px"><div class="ct" style="margin-bottom:14px">Crear nuevo usuario</div>'+
+    '<div class="fr">'+
+    '<div><label class="fl">Nombre</label><input class="fi" placeholder="Nombre completo" value="'+(u.nombre||'')+'" oninput="S.nu.nombre=this.value"></div>'+
+    '<div><label class="fl">Correo</label><input class="fi" type="email" placeholder="correo@grupoavantex.com" value="'+(u.email||'')+'" oninput="S.nu.email=this.value"></div>'+
+    '<div><label class="fl">Rol</label><select class="fi" onchange="S.nu.rol=this.value">'+
+    '<option value="coordinador"'+(u.rol==='coordinador'?' selected':'')+'>Coordinador</option>'+
+    '<option value="supervisor"'+(u.rol==='supervisor'?' selected':'')+'>Supervisor</option>'+
+    '<option value="admin"'+(u.rol==='admin'?' selected':'')+'>Admin</option>'+
+    '</select></div></div>'+
+    '<div style="margin-bottom:14px;max-width:200px"><label class="fl">Zona</label>'+
+    '<select class="fi" onchange="S.nu.zona=this.value"><option value="">Sin zona</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(u.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select></div>'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-n" onclick="crearUsuario()">Crear usuario</button><button class="btn" onclick="S.showNu=false;render()">Cancelar</button></div>'+
+    '</div>':'')+
+    '<div class="card" style="padding:0;overflow:hidden">'+
+    '<table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Zona</th><th>Estado</th></tr></thead><tbody>'+
+    (S.usuarios.length?S.usuarios.map(usr=>'<tr>'+
+      '<td><div style="display:flex;align-items:center;gap:9px"><div style="width:30px;height:30px;border-radius:50%;background:var(--navyL);color:var(--navy);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">'+(usr.nombre||'?').charAt(0)+'</div><span style="font-weight:600">'+usr.nombre+'</span></div></td>'+
+      '<td style="color:var(--g600);font-size:12px">'+usr.email+'</td>'+
+      '<td><select style="font-size:12px;padding:3px 10px;border-radius:6px;border:none;font-weight:600;cursor:pointer;'+(rs[usr.rol]||'')+'" onchange="setRol(\''+usr.id+'\',this.value)">'+
+      '<option value="coordinador"'+(usr.rol==='coordinador'?' selected':'')+'>Coordinador</option>'+
+      '<option value="supervisor"'+(usr.rol==='supervisor'?' selected':'')+'>Supervisor</option>'+
+      '<option value="admin"'+(usr.rol==='admin'?' selected':'')+'>Admin</option>'+
+      '</select></td>'+
+      '<td>'+(usr.zona?'<span class="badge bz">'+usr.zona+'</span>':'<span style="color:var(--g400)">—</span>')+'</td>'+
+      '<td><span class="badge '+(usr.activo?'ba':'br')+'">'+(usr.activo?'Activo':'Inactivo')+'</span></td>'+
+    '</tr>').join(''):'<tr><td colspan="5" class="empty">Sin usuarios</td></tr>')+
+    '</tbody></table></div>'
+}
+
+// ── Main render ──
+function render(){
+  const root=document.getElementById('root')
+  if(!root)return
+
+  if(!S.user){
+    root.innerHTML='<div class="auth-sc"><div style="width:380px">'+
+      '<div class="auth-logo">'+
+      '<div class="auth-icon"><span class="auth-ax">AX</span></div>'+
+      '<div class="auth-g">Grupo</div><div class="auth-n">AVANTEX</div></div>'+
+      '<div class="auth-card">'+
+      '<div class="auth-t">Bienvenido</div>'+
+      '<div class="auth-s">Sistema de control de viáticos</div>'+
+      '<div id="ae"></div>'+
+      '<div class="fg"><label class="fl">Correo</label><input class="fi" id="le" type="email" value="tatianavargas@grupoavantex.com"></div>'+
+      '<div class="fg"><label class="fl">Contraseña</label><input class="fi" id="lp" type="password" placeholder="••••••••" onkeydown="if(event.key===\'Enter\')doL()"></div>'+
+      '<button class="btn-login" id="lb" onclick="doL()">Iniciar sesión</button>'+
+      '</div>'+
+      '<div class="auth-ft">www.grupoavantex.com · San Pedro Garza García, N.L.</div>'+
+      '</div></div>'
+    return
+  }
+
+  if(S.loading){
+    root.innerHTML='<div class="app">'+sidebar()+'<div class="main"><div class="ldr"><div class="ring"></div><div style="font-size:13px;color:var(--g600)">Cargando datos...</div></div></div></div>'
+    return
+  }
+
+  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios'}
+  const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios}
+  const pageHtml=(pages[S.page]||pResumen)()
+
+  root.innerHTML='<div class="app">'+sidebar()+
+    '<div class="main">'+
+    '<div class="topbar">'+
+    '<div><div style="font-size:15px;font-weight:600;color:var(--g900)">'+(labels[S.page]||'Dashboard')+'</div>'+
+    '<div style="font-size:11px;color:var(--g400)">Grupo Avantex · Control de Viáticos 2026</div></div>'+
+    '<span style="background:var(--navyL);color:var(--navy);font-size:12px;font-weight:500;padding:4px 12px;border-radius:20px">Política vigente: Feb 2026</span>'+
+    '</div>'+
+    '<div class="content">'+pageHtml+'</div>'+
+    '</div></div>'
+
+  if(S.page==='captura') renderLineas()
+}
+
+async function doL(){
+  const e=document.getElementById('le').value
+  const p=document.getElementById('lp').value
+  const btn=document.getElementById('lb')
+  const err=document.getElementById('ae')
+  btn.disabled=true;btn.textContent='Verificando...'
+  const error=await login(e,p)
+  if(error){
+    err.innerHTML='<div class="err-msg">'+error+'</div>'
+    btn.disabled=false;btn.textContent='Iniciar sesión'
+  }
+}
+
+render()
+sb.auth.getSession().then(function(r){
+  var session=r.data.session
+  if(session&&session.user){
+    S.user=session.user
+    sb.from('perfiles').select('*').eq('id',session.user.id).single().then(function(r2){
+      S.perfil=r2.data;loadAll()
+    })
+  }
+})
+</script>
+</body>
+</html>
