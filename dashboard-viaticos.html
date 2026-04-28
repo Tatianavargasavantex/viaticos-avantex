@@ -593,7 +593,7 @@ function pComparativo(){
         '<td style="text-align:right" class="'+(d>=0?'pos':'neg')+'">'+( d>=0?'+':'')+fmt(d)+'</td>'+
         '<td>'+pbr(r.g,r.p)+'<span style="font-size:10px;color:var(--g400);margin-left:4px">'+p2+'%</span></td>'+
         '<td>'+est+'</td></tr>'
-    }).join('')+'<tr><td colspan="7" class="empty">Sin presupuestos</td></tr>')+
+    }).join(''):'<tr><td colspan="7" class="empty">Sin presupuestos</td></tr>')
     '</tbody></table></div></div>'
 }
 
