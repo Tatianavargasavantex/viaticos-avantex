@@ -496,8 +496,8 @@ function pCaptura(){
       '<td style="color:var(--g600);font-size:12px">'+r.concepto+'</td>'+
       '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
       '<td>'+be(r.estado)+'</td>'+
-      '<td>'+(r.estado==='PENDIENTE'?'<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="delPres(\''+ r.id +'\')">✕</button>':'')+'</td>'+
-    '</tr>').join('')+'<tr><td colspan="8" class="empty">No hay registros aún</td></tr>')+
+      '<td>'+(r.estado==='PENDIENTE'?'<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="delPres(\''+r.id+'\')">✕</button>':'')+'</td>'+
+    '</tr>').join(''):'<tr><td colspan="8" class="empty">No hay registros aún</td></tr>')+
     '</tbody></table></div></div></div>'
 }
 
