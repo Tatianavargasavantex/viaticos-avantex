@@ -157,7 +157,7 @@ const pct=(g,p)=>p?Math.round((g/p)*100):0
 const be=e=>{
   const m={PENDIENTE:'bp',APROBADO:'ba',RECHAZADO:'br'}
   const l={PENDIENTE:'Pendiente',APROBADO:'Aprobado',RECHAZADO:'Rechazado'}
-  return '<span class="badge '+(m[e]||'")>'+l[e]+'</span>'
+  return '<span class="badge '+(m[e]||'bz')+'">'+l[e]+'</span>'
 }
 const pbr=(g,p)=>{
   const v=Math.min(pct(g,p),100)
