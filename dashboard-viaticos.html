@@ -648,7 +648,7 @@ function pUsuarios(){
       '</select></td>'+
       '<td>'+(usr.zona?'<span class="badge bz">'+usr.zona+'</span>':'<span style="color:var(--g400)">—</span>')+'</td>'+
       '<td><span class="badge '+(usr.activo?'ba':'br')+'">'+( usr.activo?'Activo':'Inactivo')+'</span></td>'+
-    '</tr>').join('')+'<tr><td colspan="5" class="empty">Sin usuarios</td></tr>')+
+    '</tr>').join(''):'<tr><td colspan="5" class="empty">Sin usuarios</td></tr>')
     '</tbody></table></div>'
 }
 
