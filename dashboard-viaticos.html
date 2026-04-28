@@ -548,7 +548,7 @@ function pAprobacion(){
       '<td>'+be(r.estado)+'</td>'+
       '<td>'+(r.estado==='PENDIENTE'?
         '<button class="btn btn-xs" style="color:var(--green);border-color:#BBF7D0;margin-right:4px" onclick="setEstado(\''+ r.id +'\',\'APROBADO\',\'\')">✓</button>'+
-        '<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="setEstado(\''+ r.id +'\',\'RECHAZADO\',\'\')">✕</button>':
+      '<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="setEstado(\''+ r.id +'\',\'RECHAZADO\',\'\')">✕</button>':
         '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
       '</td></tr>'
     ).join('')+'<tr><td colspan="10" class="empty">Sin registros</td></tr>')+
