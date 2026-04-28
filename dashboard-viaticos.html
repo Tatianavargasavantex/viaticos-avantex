@@ -611,7 +611,7 @@ function pTecnicos(){
     '</div>'+
     '<div class="card" style="padding:0;overflow:hidden">'+
     '<table><thead><tr><th>Nombre</th><th>Zona</th><th>Ciudad</th><th>UDN</th><th>Estado</th></tr></thead><tbody>'+
-    (tf.length?tf.map(t=>'<tr><td style="font-weight:600">'+t.nombre+'</td><td><span class="badge bz">'+t.zona+'</span></td><td style="color:var(--g600)">'+t.ciudad+'</td><td style="color:var(--g600);font-size:12px">'+t.udn+'</td><td><span class="badge '+(t.activo?'ba':'br')+'">'+( t.activo?'Activo':'Inactivo')+'</span></td></tr>').join('')+'<tr><td colspan="5" class="empty">Sin técnicos</td></tr>')+
+    (tf.length?tf.map(t=>'<tr><td style="font-weight:600">'+t.nombre+'</td><td><span class="badge bz">'+t.zona+'</span></td><td style="color:var(--g600)">'+t.ciudad+'</td><td style="color:var(--g600);font-size:12px">'+t.udn+'</td><td><span class="badge '+(t.activo?'ba':'br')+'">'+( t.activo?'Activo':'Inactivo')+'</span></td></tr>').join(''):'<tr><td colspan="5" class="empty">Sin técnicos</td></tr>')
     '</tbody></table></div>'
 }
 
