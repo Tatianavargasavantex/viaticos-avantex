@@ -523,7 +523,7 @@ function sidebar(){
     {id:'usuarios',l:'Usuarios',r:['admin']},
     {id:'ch_resumen',l:'CH — Resumen',r:['admin','supervisor'],b:0},
     {id:'ch_captura',l:'CH — Captura',r:['admin','coordinador']},
-    {id:'ch_aprobacion',l:'CH — Aprobación',r:['admin','supervisor'],b:S.chGastos.filter(r=>r.estado==='PENDIENTE').length},
+    {id:'ch_aprobacion',l:'CH — Aprobación',r:['admin','supervisor'],b:(S.chGastos||[]).filter(r=>r.estado==='PENDIENTE').length},
   ].filter(n=>n.r.includes(rol))
   return '<aside class="sidebar">'+
     '<div class="sb-head"><div class="logo-wrap"><div class="logo-box"><span class="logo-ax">AX</span></div>'+
@@ -872,8 +872,8 @@ function render(){
     return
   }
 
-  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios',ch_resumen:'CH — Resumen',ch_captura:'CH — Captura de gasto',ch_aprobacion:'CH — Aprobación'}
-  const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios,ch_resumen:pResumenCH,ch_captura:pCapturaCH,ch_aprobacion:pAprobacionCH}
+  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios'}
+  const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios}
   const pageHtml=(pages[S.page]||pResumen)()
 
   root.innerHTML='<div class="app">'+sidebar()+
