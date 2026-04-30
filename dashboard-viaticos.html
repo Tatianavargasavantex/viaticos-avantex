@@ -701,10 +701,16 @@ async function doL(){
   const p=document.getElementById('lp').value
   const btn=document.getElementById('lb')
   const err=document.getElementById('ae')
+  if(!e||!p){err.innerHTML='<div class="err-msg">Ingresa correo y contraseña</div>';return}
   btn.disabled=true;btn.textContent='Verificando...'
-  const error=await login(e,p)
-  if(error){
-    err.innerHTML='<div class="err-msg">'+error+'</div>'
+  try{
+    const error=await login(e,p)
+    if(error){
+      err.innerHTML='<div class="err-msg">'+error+'</div>'
+      btn.disabled=false;btn.textContent='Iniciar sesión'
+    }
+  }catch(ex){
+    err.innerHTML='<div class="err-msg">Error de conexión: '+ex.message+'</div>'
     btn.disabled=false;btn.textContent='Iniciar sesión'
   }
 }
