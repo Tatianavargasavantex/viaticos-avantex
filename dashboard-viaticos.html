@@ -178,6 +178,8 @@ async function loadAll(){
   S.tecnicos=t.data||[]
   S.usuarios=u.data||[]
   S.banco=g.data||[]
+  const ch=await sb.from('ch_gastos').select('*').order('creado_en',{ascending:false}).limit(2000)
+  S.chGastos=ch.data||[]
   S.loading=false;render()
 }
 
@@ -321,6 +323,194 @@ async function crearUsuario(){
   await loadAll()
 }
 
+
+// ── Capital Humano ──
+async function guardarGastoCH(){
+  const c=S.ch
+  if(!c.categoria||!c.monto||parseFloat(c.monto)<=0){S.chMsg={t:'e',m:'Completa categoría y monto'};render();return}
+  const row={mes:c.mes,anio:2026,semana:parseInt(c.semana),categoria:c.categoria,subcategoria:c.subcategoria||c.categoria,descripcion:c.descripcion||null,monto:parseFloat(c.monto),area:c.area||'MATRIZ',coordinador_id:S.user.id,estado:'PENDIENTE'}
+  const{error}=await sb.from('ch_gastos').insert([row])
+  if(error){S.chMsg={t:'e',m:error.message};render();return}
+  S.chMsg={t:'o',m:'Gasto registrado correctamente'}
+  S.ch={...S.ch,subcategoria:'',descripcion:'',monto:''}
+  setTimeout(()=>{S.chMsg=null;render()},4000)
+  await loadAll()
+}
+
+async function setEstadoCH(ids,accion,nota){
+  const arr=Array.isArray(ids)?ids:[ids]
+  for(const id of arr){await sb.from('ch_gastos').update({estado:accion}).eq('id',id)}
+  S.chSel=new Set();await loadAll()
+}
+
+async function delGastoCH(id){
+  if(!confirm('Eliminar este registro?'))return
+  await sb.from('ch_gastos').delete().eq('id',id);await loadAll()
+}
+
+function filCH(arr){
+  return arr.filter(r=>(!S.chf.mes||r.mes===S.chf.mes)&&(!S.chf.categoria||r.categoria===S.chf.categoria))
+}
+
+function getPresCH(mes,cat){
+  const mp=CH_PRESUPUESTO[mes]
+  if(!mp)return 0
+  if(cat.includes('RECLUT'))return mp.RECLUTAMIENTO||0
+  if(cat.includes('EVENTO'))return mp.EVENTOS||0
+  if(cat.includes('CAPAC'))return mp.CAPACITACION||0
+  if(cat.includes('HONOR'))return mp.HONORARIOS||0
+  if(cat.includes('SISTEM'))return mp.SISTEMAS||0
+  if(cat.includes('UNIFORM'))return mp.UNIFORMES||0
+  if(cat.includes('COMUNI'))return mp.COMUNICACION||0
+  return mp.OTROS||0
+}
+
+function getPresCHTotal(cat){
+  return MESES.reduce((a,m)=>a+getPresCH(m,cat),0)
+}
+
+function pResumenCH(){
+  const data=filCH(S.chGastos)
+  const mes=S.chf.mes||null
+  let totPres=0
+  if(mes&&CH_PRESUPUESTO[mes])totPres=Object.values(CH_PRESUPUESTO[mes]).reduce((a,v)=>a+v,0)
+  else MESES.forEach(m=>{if(CH_PRESUPUESTO[m])totPres+=Object.values(CH_PRESUPUESTO[m]).reduce((a,v)=>a+v,0)})
+  const totGasto=data.filter(r=>r.estado==='APROBADO').reduce((a,r)=>a+(r.monto||0),0)
+  const pend=data.filter(r=>r.estado==='PENDIENTE').length
+  const dif=totPres-totGasto
+  const filtroLabel=mes?(mes.charAt(0)+mes.slice(1).toLowerCase()):'Todo el año'
+  const cats=CH_CATEGORIAS.map(cat=>{
+    const p=mes?getPresCH(mes,cat):getPresCHTotal(cat)
+    const g=data.filter(r=>r.estado==='APROBADO'&&r.categoria===cat).reduce((a,r)=>a+(r.monto||0),0)
+    return{cat,p,g}
+  })
+  return '<div class="pg-t">Capital Humano — Resumen</div>'+
+    '<div class="pg-s">'+filtroLabel+' · Presupuesto vs gasto real</div>'+
+    '<div class="flt">'+
+    '<select class="fs" onchange="S.chf.mes=this.value;render()"><option value="">Todos los meses</option>'+
+    MESES.map(m=>'<option value="'+m+'"'+(S.chf.mes===m?' selected':'')+'>'+m.charAt(0)+m.slice(1).toLowerCase()+'</option>').join('')+'</select>'+
+    (S.chf.mes?'<button class="btn btn-sm" onclick="S.chf.mes=\'\';render()" style="font-size:11px;color:var(--red);border-color:#FECACA">✕ Limpiar</button>':'')+
+    '</div>'+
+    '<div class="kpig">'+
+    '<div class="kpi acc"><div class="kl">Presupuesto CH</div><div class="kv">'+fmt(totPres)+'</div><div class="ks">'+filtroLabel+'</div></div>'+
+    '<div class="kpi"><div class="kl">Gasto aprobado</div><div class="kv">'+fmt(totGasto)+'</div><div class="ks">'+pct(totGasto,totPres)+'% del presupuesto</div></div>'+
+    '<div class="kpi '+(dif>=0?'grn':'red')+'"><div class="kl">Diferencia</div><div class="kv '+(dif>=0?'pos':'neg')+'">'+(dif>=0?'+':'')+fmt(dif)+'</div><div class="ks">'+(dif>=0?'dentro de presupuesto':'excedido')+'</div></div>'+
+    '<div class="kpi amb"><div class="kl">Pendientes</div><div class="kv" style="color:var(--amber)">'+pend+'</div><div class="ks">por autorizar</div></div>'+
+    '</div>'+
+    '<div class="card"><div class="ch" style="margin-bottom:14px"><div class="ct">Presupuesto vs gasto por categoría</div></div>'+
+    '<table><thead><tr><th>Categoría</th><th style="text-align:right">Presupuesto</th><th style="text-align:right">Gasto real</th><th style="text-align:right">Diferencia</th><th>Avance</th></tr></thead><tbody>'+
+    cats.filter(x=>x.p>0||x.g>0).map(function(x){
+      var d=x.p-x.g
+      return '<tr><td style="font-size:12px;font-weight:500">'+x.cat+'</td>'+
+        '<td style="text-align:right;font-weight:600">'+fmt(x.p)+'</td>'+
+        '<td style="text-align:right">'+fmt(x.g)+'</td>'+
+        '<td style="text-align:right" class="'+(d>=0?'pos':'neg')+'">'+(d>=0?'+':'')+fmt(d)+'</td>'+
+        '<td>'+pbr(x.g,x.p)+'<span style="font-size:10px;color:var(--g400);margin-left:4px">'+pct(x.g,x.p)+'%</span></td></tr>'
+    }).join('')+
+    '</tbody></table></div>'+
+    (data.length===0?'<div class="notice" style="margin-top:8px"><strong>Sin gastos reales aún</strong> · Cuando CH capture sus gastos, aparecerán aquí. El presupuesto 2026 ya está cargado.</div>':'')
+}
+
+function pCapturaCH(){
+  const c=S.ch
+  const subs=CH_SUBCATEGORIAS[c.categoria]||[]
+  const regs=filCH(S.chGastos).slice(0,50)
+  return '<div class="pg-t">Capital Humano — Captura de gasto</div>'+
+    '<div class="pg-s">Registra el gasto real del departamento</div>'+
+    '<div style="display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start">'+
+    '<div class="card" style="margin:0">'+
+    '<div class="ct" style="margin-bottom:14px">Nuevo gasto</div>'+
+    (S.chMsg?'<div class="'+(S.chMsg.t==='o'?'ok-msg':'err-msg')+'">'+S.chMsg.m+'</div>':'')+
+    '<div class="fsec">Periodo</div>'+
+    '<div class="fr2">'+
+    '<div><label class="fl">Mes</label><select class="fi" onchange="S.ch.mes=this.value;render()">'+MESES.map(m=>'<option value="'+m+'"'+(c.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Semana</label><input class="fi" type="number" min="1" max="5" value="'+c.semana+'" onchange="S.ch.semana=this.value"></div>'+
+    '</div>'+
+    '<div class="fsec">Gasto</div>'+
+    '<div style="margin-bottom:10px"><label class="fl">Categoría</label>'+
+    '<select class="fi" onchange="S.ch.categoria=this.value;S.ch.subcategoria=\'\';render()">'+
+    CH_CATEGORIAS.map(cat=>'<option value="'+cat+'"'+(c.categoria===cat?' selected':'')+'>'+cat+'</option>').join('')+
+    '</select></div>'+
+    '<div style="margin-bottom:10px"><label class="fl">Subcategoría</label>'+
+    '<select class="fi" onchange="S.ch.subcategoria=this.value">'+
+    '<option value="">— Selecciona —</option>'+
+    subs.map(s=>'<option value="'+s+'"'+(c.subcategoria===s?' selected':'')+'>'+s+'</option>').join('')+
+    '</select></div>'+
+    '<div style="margin-bottom:10px"><label class="fl">Área</label>'+
+    '<select class="fi" onchange="S.ch.area=this.value">'+
+    ['MATRIZ','CDMX','GENERAL'].map(a=>'<option value="'+a+'"'+(c.area===a?' selected':'')+'>'+a+'</option>').join('')+
+    '</select></div>'+
+    '<div style="margin-bottom:10px"><label class="fl">Descripción</label>'+
+    '<input class="fi" placeholder="Detalle del gasto..." value="'+(c.descripcion||'')+'" onchange="S.ch.descripcion=this.value"></div>'+
+    '<div style="margin-bottom:14px"><label class="fl">Monto ($MXN)</label>'+
+    '<input class="fi" type="number" min="0" step="1" placeholder="0" value="'+(c.monto||'')+'" style="font-size:15px;font-weight:600" onchange="S.ch.monto=this.value"></div>'+
+    '<button class="btn btn-n" style="width:100%;padding:11px;font-size:14px" onclick="guardarGastoCH()">Guardar gasto</button>'+
+    '</div>'+
+    '<div class="card" style="margin:0">'+
+    '<div class="ch"><div><div class="ct">Gastos registrados</div><div class="cs">'+regs.length+' registros</div></div>'+
+    '<select class="fs" onchange="S.chf.mes=this.value;render()"><option value="">Todos los meses</option>'+MESES.map(m=>'<option value="'+m+'"'+(S.chf.mes===m?' selected':'')+'>'+m.charAt(0)+m.slice(1).toLowerCase()+'</option>').join('')+'</select>'+
+    '</div>'+
+    '<div class="tw"><table><thead><tr><th>Mes</th><th>Categoría</th><th>Subcategoría</th><th>Área</th><th style="text-align:right">Monto</th><th>Estado</th><th></th></tr></thead><tbody>'+
+    (regs.length?regs.map(r=>'<tr>'+
+      '<td style="font-size:12px">'+r.mes+'</td>'+
+      '<td style="font-size:11px;color:var(--g600)">'+r.categoria+'</td>'+
+      '<td style="font-size:11px;color:var(--g600)">'+r.subcategoria+'</td>'+
+      '<td><span class="badge bz">'+(r.area||'MATRIZ')+'</span></td>'+
+      '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
+      '<td>'+be(r.estado)+'</td>'+
+      '<td>'+(r.estado==='PENDIENTE'?'<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="delGastoCH(\''+r.id+'\')">✕</button>':'')+'</td>'+
+    '</tr>').join(''):'<tr><td colspan="7" class="empty">Sin gastos registrados aún</td></tr>')+
+    '</tbody></table></div></div></div>'
+}
+
+function pAprobacionCH(){
+  let data=S.chGastos
+  if(S.chAfe)data=data.filter(r=>r.estado===S.chAfe)
+  const pend=S.chGastos.filter(r=>r.estado==='PENDIENTE').length
+  const apro=S.chGastos.filter(r=>r.estado==='APROBADO').length
+  const rech=S.chGastos.filter(r=>r.estado==='RECHAZADO').length
+  const sel=S.chSel
+  const totSel=Array.from(sel).reduce((a,id)=>{const r=S.chGastos.find(r=>r.id===id);return a+(r?r.monto:0)},0)
+  return '<div class="pg-t">Capital Humano — Aprobación</div>'+
+    '<div class="pg-s">Autoriza o rechaza gastos de Capital Humano</div>'+
+    '<div class="g3">'+
+    '<div class="kpi amb"><div class="kl">Pendientes</div><div class="kv" style="color:var(--amber)">'+pend+'</div></div>'+
+    '<div class="kpi grn"><div class="kl">Aprobados</div><div class="kv" style="color:var(--green)">'+apro+'</div></div>'+
+    '<div class="kpi red"><div class="kl">Rechazados</div><div class="kv" style="color:var(--red)">'+rech+'</div></div>'+
+    '</div>'+
+    '<div class="flt">'+
+    '<select class="fs" onchange="S.chAfe=this.value;render()"><option value="">Todos</option><option value="PENDIENTE"'+(S.chAfe==='PENDIENTE'?' selected':'')+'>Pendientes</option><option value="APROBADO"'+(S.chAfe==='APROBADO'?' selected':'')+'>Aprobados</option><option value="RECHAZADO"'+(S.chAfe==='RECHAZADO'?' selected':'')+'>Rechazados</option></select>'+
+    '</div>'+
+    (sel.size>0?'<div class="abar">'+
+    '<span style="font-size:13px;color:var(--navy);font-weight:600">'+sel.size+' seleccionados · '+fmt(totSel)+'</span>'+
+    '<input class="fin" placeholder="Nota..." id="nota-ch-sel" style="flex:1;min-width:180px">'+
+    '<button class="btn btn-g btn-sm" onclick="setEstadoCH(Array.from(S.chSel),\'APROBADO\',document.getElementById(\'nota-ch-sel\').value)">✓ Aprobar</button>'+
+    '<button class="btn btn-r btn-sm" onclick="setEstadoCH(Array.from(S.chSel),\'RECHAZADO\',document.getElementById(\'nota-ch-sel\').value)">✕ Rechazar</button>'+
+    '</div>':'')+
+    '<div class="card" style="padding:0;overflow:hidden">'+
+    '<table><thead><tr>'+
+    '<th style="width:36px"><input type="checkbox" onchange="var ids=S.chGastos.filter(r=>r.estado===\'PENDIENTE\').map(r=>r.id);S.chSel=this.checked?new Set(ids):new Set();render()"></th>'+
+    '<th>Mes</th><th>Sem</th><th>Categoría</th><th>Subcategoría</th><th>Área</th><th>Descripción</th><th style="text-align:right">Monto</th><th>Estado</th><th>Acciones</th>'+
+    '</tr></thead><tbody>'+
+    (data.length?data.map(r=>'<tr>'+
+      '<td>'+(r.estado==='PENDIENTE'?'<input type="checkbox"'+(sel.has(r.id)?' checked':'')+' onchange="S.chSel[this.checked?\'add\':\'delete\'](\'' +r.id+ '\');render()">':'')+'</td>'+
+      '<td style="font-size:12px">'+r.mes+'</td>'+
+      '<td><span class="badge bs">S'+(r.semana||1)+'</span></td>'+
+      '<td style="font-size:11px;color:var(--g600)">'+r.categoria+'</td>'+
+      '<td style="font-size:11px;color:var(--g600)">'+r.subcategoria+'</td>'+
+      '<td><span class="badge bz">'+(r.area||'MATRIZ')+'</span></td>'+
+      '<td style="font-size:12px">'+(r.descripcion||'—')+'</td>'+
+      '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
+      '<td>'+be(r.estado)+'</td>'+
+      '<td>'+(r.estado==='PENDIENTE'?
+        '<button class="btn btn-xs" style="color:var(--green);border-color:#BBF7D0;margin-right:4px" onclick="setEstadoCH(\''+r.id+'\',\'APROBADO\',\'\')">✓</button>'+
+        '<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="setEstadoCH(\''+r.id+'\',\'RECHAZADO\',\'\')">✕</button>':
+        '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
+      '</td></tr>'
+    ).join(''):'<tr><td colspan="10" class="empty">Sin registros</td></tr>')+
+    '</tbody></table></div>'
+}
+
 function sidebar(){
   const rol=S.perfil?S.perfil.rol:'coordinador'
   const pend=S.presupuestos.filter(r=>r.estado==='PENDIENTE').length
@@ -331,6 +521,9 @@ function sidebar(){
     {id:'comparativo',l:'Comparativo banco',r:['admin','supervisor']},
     {id:'tecnicos',l:'Técnicos',r:['admin','coordinador','supervisor']},
     {id:'usuarios',l:'Usuarios',r:['admin']},
+    {id:'ch_resumen',l:'CH — Resumen',r:['admin','supervisor'],b:0},
+    {id:'ch_captura',l:'CH — Captura',r:['admin','coordinador']},
+    {id:'ch_aprobacion',l:'CH — Aprobación',r:['admin','supervisor'],b:S.chGastos.filter(r=>r.estado==='PENDIENTE').length},
   ].filter(n=>n.r.includes(rol))
   return '<aside class="sidebar">'+
     '<div class="sb-head"><div class="logo-wrap"><div class="logo-box"><span class="logo-ax">AX</span></div>'+
@@ -679,8 +872,8 @@ function render(){
     return
   }
 
-  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios'}
-  const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios}
+  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios',ch_resumen:'CH — Resumen',ch_captura:'CH — Captura de gasto',ch_aprobacion:'CH — Aprobación'}
+  const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios,ch_resumen:pResumenCH,ch_captura:pCapturaCH,ch_aprobacion:pAprobacionCH}
   const pageHtml=(pages[S.page]||pResumen)()
 
   root.innerHTML='<div class="app">'+sidebar()+
@@ -701,16 +894,10 @@ async function doL(){
   const p=document.getElementById('lp').value
   const btn=document.getElementById('lb')
   const err=document.getElementById('ae')
-  if(!e||!p){err.innerHTML='<div class="err-msg">Ingresa correo y contraseña</div>';return}
   btn.disabled=true;btn.textContent='Verificando...'
-  try{
-    const error=await login(e,p)
-    if(error){
-      err.innerHTML='<div class="err-msg">'+error+'</div>'
-      btn.disabled=false;btn.textContent='Iniciar sesión'
-    }
-  }catch(ex){
-    err.innerHTML='<div class="err-msg">Error de conexión: '+ex.message+'</div>'
+  const error=await login(e,p)
+  if(error){
+    err.innerHTML='<div class="err-msg">'+error+'</div>'
     btn.disabled=false;btn.textContent='Iniciar sesión'
   }
 }
