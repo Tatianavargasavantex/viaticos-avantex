@@ -178,10 +178,8 @@ async function loadAll(){
   S.tecnicos=t.data||[]
   S.usuarios=u.data||[]
   S.banco=g.data||[]
-  try{
-    const ch=await sb.from('ch_gastos').select('*').order('creado_en',{ascending:false}).limit(2000)
-    S.chGastos=ch.data||[]
-  }catch(e){S.chGastos=[]}
+  const ch=await sb.from('ch_gastos').select('*').order('creado_en',{ascending:false}).limit(2000)
+  S.chGastos=ch.data||[]
   S.loading=false;render()
 }
 
@@ -513,74 +511,6 @@ function pAprobacionCH(){
     '</tbody></table></div>'
 }
 
-
-// ── CSV Export ──
-function csvDownload(filename,rows){
-  const BOM='\uFEFF'
-  const csv=BOM+rows.map(r=>r.map(c=>{
-    const s=String(c===null||c===undefined?'':c)
-    return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s
-  }).join(',')).join('\n')
-  const a=document.createElement('a')
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}))
-  a.download=filename;a.click()
-}
-function csvPresupuestos(){
-  const data=fil(S.presupuestos)
-  const head=['Semana','Mes','Tipo','Tecnico','Zona','Ciudad','UDN','Ruta','Concepto','Monto','Estado','Comentarios']
-  const rows=data.map(r=>[r.semana,r.mes,r.tipo||'',r.tecnico_nombre,r.zona,r.ciudad||'',r.udn||'',r.ruta||'SIN RUTA',r.concepto,r.monto,r.estado,r.comentarios||''])
-  csvDownload('presupuestos_'+(S.f.mes||'TodoElAño')+(S.f.zona?'_'+S.f.zona:'')+'.csv',[head,...rows])
-}
-function csvPorZona(){
-  const data=fil(S.presupuestos);const banco=filBanco(S.banco);const zonas={}
-  data.forEach(r=>{if(!zonas[r.zona])zonas[r.zona]={zona:r.zona,p:0,g:0};zonas[r.zona].p+=r.monto})
-  banco.forEach(r=>{if(r.zona&&zonas[r.zona])zonas[r.zona].g+=(r.monto||0)})
-  const head=['Zona','Presupuesto','Gasto','Diferencia','% Avance']
-  const rows=Object.values(zonas).sort((a,b)=>b.p-a.p).map(r=>[r.zona,r.p,r.g,r.p-r.g,pct(r.g,r.p)+'%'])
-  csvDownload('por_zona_'+(S.f.mes||'TodoElAño')+'.csv',[head,...rows])
-}
-function csvPorConcepto(){
-  const data=fil(S.presupuestos);const banco=filBanco(S.banco);const concs={}
-  data.forEach(r=>{if(!concs[r.concepto])concs[r.concepto]={c:r.concepto,p:0,g:0};concs[r.concepto].p+=r.monto})
-  banco.forEach(r=>{if(r.concepto&&concs[r.concepto])concs[r.concepto].g+=(r.monto||0)})
-  const head=['Concepto','Presupuesto','Gasto','Diferencia','% Avance']
-  const rows=Object.values(concs).sort((a,b)=>b.p-a.p).map(r=>[r.c,r.p,r.g,r.p-r.g,pct(r.g,r.p)+'%'])
-  csvDownload('por_concepto_'+(S.f.mes||'TodoElAño')+'.csv',[head,...rows])
-}
-function csvPorTecnico(){
-  const data=fil(S.presupuestos);const banco=filBanco(S.banco);const tecs={}
-  data.forEach(r=>{if(!tecs[r.tecnico_nombre])tecs[r.tecnico_nombre]={t:r.tecnico_nombre,z:r.zona,u:r.udn||'',p:0,g:0};tecs[r.tecnico_nombre].p+=r.monto})
-  banco.forEach(r=>{if(tecs[r.tecnico_nombre])tecs[r.tecnico_nombre].g+=(r.monto||0)})
-  const head=['Tecnico','Zona','UDN','Presupuesto','Gasto','Diferencia','% Avance']
-  const rows=Object.values(tecs).sort((a,b)=>b.p-a.p).map(r=>[r.t,r.z,r.u,r.p,r.g,r.p-r.g,pct(r.g,r.p)+'%'])
-  csvDownload('por_tecnico_'+(S.f.mes||'TodoElAño')+'.csv',[head,...rows])
-}
-function csvPorRuta(){
-  const data=fil(S.presupuestos);const banco=filBanco(S.banco);const rutas={}
-  data.forEach(r=>{const rt=r.ruta||'SIN RUTA';if(!rutas[rt])rutas[rt]={ruta:rt,p:0,g:0,n:0};rutas[rt].p+=r.monto;rutas[rt].n++})
-  banco.forEach(r=>{const rt=r.ruta||'SIN RUTA';if(rutas[rt])rutas[rt].g+=(r.monto||0)})
-  const head=['Ruta','Presupuesto','Gasto','Diferencia','% Avance','Registros']
-  const rows=Object.values(rutas).sort((a,b)=>b.p-a.p).map(r=>[r.ruta,r.p,r.g,r.p-r.g,pct(r.g,r.p)+'%',r.n])
-  csvDownload('por_ruta_'+(S.f.mes||'TodoElAño')+'.csv',[head,...rows])
-}
-function csvTotalesMes(){
-  const head=['Mes','Presupuesto','Gasto','Diferencia','% Avance','Pendientes','Aprobados','Rechazados']
-  const rows=MESES.map(mes=>{
-    const dp=S.presupuestos.filter(r=>r.mes===mes)
-    const db=S.banco.filter(r=>r.mes===mes)
-    const p=dp.reduce((a,r)=>a+r.monto,0)
-    const g=db.reduce((a,r)=>a+(r.monto||0),0)
-    return[mes,p,g,p-g,pct(g,p)+'%',dp.filter(r=>r.estado==='PENDIENTE').length,dp.filter(r=>r.estado==='APROBADO').length,dp.filter(r=>r.estado==='RECHAZADO').length]
-  }).filter(r=>r[1]>0||r[2]>0)
-  csvDownload('totales_por_mes.csv',[head,...rows])
-}
-function csvCH(){
-  const data=filCH(S.chGastos)
-  const head=['Mes','Semana','Categoría','Subcategoría','Área','Descripción','Monto','Estado']
-  const rows=data.map(r=>[r.mes,r.semana||1,r.categoria,r.subcategoria||'',r.area||'MATRIZ',r.descripcion||'',r.monto,r.estado])
-  csvDownload('capital_humano_'+(S.chf.mes||'TodoElAño')+'.csv',[head,...rows])
-}
-
 function sidebar(){
   const rol=S.perfil?S.perfil.rol:'coordinador'
   const pend=S.presupuestos.filter(r=>r.estado==='PENDIENTE').length
@@ -675,15 +605,6 @@ function pResumen(){
         '<td style="text-align:right">'+fmt(v.g)+'</td>'+
         '<td style="text-align:right" class="'+(d>=0?'pos':'neg')+'">'+( d>=0?'+':'')+fmt(d)+'</td></tr>'
     }).join('')+'</tbody></table></div></div>'+
-    '<div class="card" style="margin-bottom:16px"><div class="ch"><div><div class="ct">Exportar datos</div><div class="cs">Descarga con filtros activos</div></div></div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-    '<button class="btn btn-sm" onclick="csvPresupuestos()" style="border-color:var(--navyL);color:var(--navy)">⬇ Detalle completo</button>'+
-    '<button class="btn btn-sm" onclick="csvPorZona()" style="border-color:var(--navyL);color:var(--navy)">⬇ Por zona</button>'+
-    '<button class="btn btn-sm" onclick="csvPorConcepto()" style="border-color:var(--navyL);color:var(--navy)">⬇ Por concepto</button>'+
-    '<button class="btn btn-sm" onclick="csvPorTecnico()" style="border-color:var(--navyL);color:var(--navy)">⬇ Por técnico</button>'+
-    '<button class="btn btn-sm" onclick="csvPorRuta()" style="border-color:#BBF7D0;color:var(--green)">⬇ Por ruta</button>'+
-    '<button class="btn btn-sm" onclick="csvTotalesMes()" style="border-color:var(--navyL);color:var(--navy)">⬇ Totales por mes</button>'+
-    '</div></div>'+
     '<div class="card"><div class="ch"><div class="ct">Top técnicos — presupuesto vs gasto</div></div>'+
     '<table><thead><tr><th>Técnico</th><th>Zona</th><th style="text-align:right">Presupuesto</th><th style="text-align:right">Gasto</th><th style="text-align:right">Diferencia</th><th>Avance</th></tr></thead><tbody>'+
     topT.map(function(e){
@@ -951,8 +872,8 @@ function render(){
     return
   }
 
-  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios'}
-  const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios}
+  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios',ch_resumen:'CH — Resumen',ch_captura:'CH — Captura de gasto',ch_aprobacion:'CH — Aprobación'}
+  const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios,ch_resumen:pResumenCH,ch_captura:pCapturaCH,ch_aprobacion:pAprobacionCH}
   const pageHtml=(pages[S.page]||pResumen)()
 
   root.innerHTML='<div class="app">'+sidebar()+
@@ -973,16 +894,10 @@ async function doL(){
   const p=document.getElementById('lp').value
   const btn=document.getElementById('lb')
   const err=document.getElementById('ae')
-  if(!e||!p){err.innerHTML='<div class="err-msg">Ingresa correo y contraseña</div>';return}
   btn.disabled=true;btn.textContent='Verificando...'
-  try{
-    const error=await login(e,p)
-    if(error){
-      err.innerHTML='<div class="err-msg">'+error+'</div>'
-      btn.disabled=false;btn.textContent='Iniciar sesión'
-    }
-  }catch(ex){
-    err.innerHTML='<div class="err-msg">Error de conexión: '+ex.message+'</div>'
+  const error=await login(e,p)
+  if(error){
+    err.innerHTML='<div class="err-msg">'+error+'</div>'
     btn.disabled=false;btn.textContent='Iniciar sesión'
   }
 }
