@@ -146,7 +146,8 @@ let S={
   chGastos:[],
   chf:{mes:'',categoria:''},
   chSel:new Set(),
-  chAfe:'PENDIENTE'
+  chAfe:'PENDIENTE',
+  chOpen:false
 }
 
 const fmt=n=>'$'+Math.round(n||0).toLocaleString('es-MX')
@@ -175,10 +176,10 @@ function filBanco(arr){
 async function loadAll(){
   S.loading=true;render()
   const[p,t,u,g]=await Promise.all([
-    sb.from('presupuestos').select('*').order('creado_en',{ascending:false}).limit(2000),
+    sb.from('presupuestos').select('*').order('creado_en',{ascending:false}).limit(5000),
     sb.from('tecnicos').select('*').eq('activo',true).order('nombre'),
     sb.from('perfiles').select('*').order('nombre'),
-    sb.from('gastos_banco').select('*').order('creado_en',{ascending:false}).limit(2000),
+    sb.from('gastos_banco').select('*').order('creado_en',{ascending:false}).limit(5000),
   ])
   S.presupuestos=p.data||[]
   S.tecnicos=t.data||[]
@@ -580,9 +581,21 @@ function sidebar(){
     '<div><span class="logo-g">Grupo</span><span class="logo-n">AVANTEX</span></div></div>'+
     '<div class="sb-mod">Control de Viáticos</div></div>'+
     '<nav class="sb-nav"><span class="sb-lbl">Módulos</span>'+
-    nav.map(n=>'<button class="nb '+(S.page===n.id?'on':'')+'" onclick="S.page=\''+ n.id +'\';render()">'+
+    nav.filter(n=>!n.id.startsWith('ch_')).map(n=>'<button class="nb '+(S.page===n.id?'on':'')+'" onclick="S.page=\''+ n.id +'\';render()">'+
       '<span class="nd"></span>'+n.l+(n.b?'<span class="nbadge">'+n.b+'</span>':'')+
     '</button>').join('')+
+    '<span class="sb-lbl" style="margin-top:10px">Capital Humano</span>'+
+    '<button class="nb" onclick="S.chOpen=!S.chOpen;render()" style="justify-content:space-between;'+((['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page)||S.chOpen)?'background:rgba(255,255,255,0.1);color:#fff;':'')+'" >'+
+    '<div style="display:flex;align-items:center;gap:9px"><span class="nd" style="background:'+((['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page)||S.chOpen)?'#fff':'rgba(255,255,255,0.25)')+'"></span>Capital Humano</div>'+
+    '<span style="font-size:10px;color:rgba(255,255,255,0.5)">'+(S.chOpen||['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page)?'▲':'▼')+'</span>'+
+    '</button>'+
+    ((S.chOpen||['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page))?
+      '<div style="margin-left:12px;border-left:1px solid rgba(255,255,255,0.12);padding-left:6px">'+
+      nav.filter(n=>n.id.startsWith('ch_')).map(n=>'<button class="nb '+(S.page===n.id?'on':'')+'" onclick="S.page=\''+ n.id +'\';render()" style="font-size:12px;padding:6px 8px">'+
+        '<span class="nd"></span>'+n.l.replace('CH — ','')+(n.b?'<span class="nbadge">'+n.b+'</span>':'')+
+      '</button>').join('')+
+      '</div>'
+    : '')+
     '</nav>'+
     '<div class="sb-foot">'+
     '<div class="u-box"><div class="av">'+(S.perfil?S.perfil.nombre.charAt(0):'?')+'</div>'+
