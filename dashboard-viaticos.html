@@ -149,7 +149,9 @@ let S={
   chf:{mes:'',categoria:''},
   chSel:new Set(),
   chAfe:'PENDIENTE',
-  chOpen:false
+  chOpen:false,
+  ns:{semana:1,mes:'ENERO',anio:2026,tipo:'PRESUPUESTADO',nota:''},nsMsg:null,
+  msf:{mes:'',estado:''}
 }
 
 const fmt=n=>'$'+Math.round(n||0).toLocaleString('es-MX')
@@ -188,7 +190,10 @@ async function loadAll(){
   S.usuarios=u.data||[]
   S.banco=g.data||[]
   try{const ch=await sb.from('ch_gastos').select('*').order('creado_en',{ascending:false}).limit(2000);S.chGastos=ch.data||[]}catch(e){S.chGastos=[]}
-  S.loading=false;render()
+  S.loading=false
+  const _rol=S.perfil?S.perfil.rol:null
+  if((_rol==='vendedor'||_rol==='administracion')&&!['mis_solicitudes','nueva_solicitud'].includes(S.page))S.page='mis_solicitudes'
+  render()
 }
 
 async function login(email,pass){
@@ -268,8 +273,12 @@ function renderLineas(){
   }
   const btn=document.getElementById('btn-guardar')
   if(btn){
-    const ts=S.tecnicos.find(t=>t.id===S.cap.tid)
-    btn.disabled=!ts||S.lineas.length===0
+    if(S.page==='nueva_solicitud'){
+      btn.disabled=S.lineas.length===0
+    } else {
+      const ts=S.tecnicos.find(t=>t.id===S.cap.tid)
+      btn.disabled=!ts||S.lineas.length===0
+    }
     btn.textContent='Guardar solicitud'+(S.lineas.length>0?' · '+fmt(total):'')
   }
 }
@@ -290,6 +299,26 @@ async function guardarPresupuesto(){
   S.capMsg={t:'o',m:rows.length+' concepto(s) guardados · Total: '+fmt(total)}
   S.lineas=[];S.cap={...S.cap,tid:'',nota:''}
   setTimeout(()=>{S.capMsg=null;render()},4000)
+  await loadAll()
+}
+
+async function guardarNuevaSolicitud(){
+  if(S.lineas.length===0)return
+  const p=S.perfil
+  const ns=S.ns
+  const rows=S.lineas.map(l=>({
+    semana:parseInt(ns.semana),mes:ns.mes,anio:parseInt(ns.anio),
+    tipo:ns.tipo,tecnico_id:null,tecnico_nombre:p.nombre,
+    zona:p.zona||'',ciudad:'',udn:'',coordinador:'',
+    concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
+    comentarios:ns.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE'
+  }))
+  const{error}=await sb.from('presupuestos').insert(rows)
+  if(error){S.nsMsg={t:'e',m:error.message};render();return}
+  const total=S.lineas.reduce((a,l)=>a+l.monto,0)
+  S.nsMsg={t:'o',m:rows.length+' concepto(s) guardados · Total: '+fmt(total)}
+  S.lineas=[];S.ns={...S.ns,nota:''}
+  setTimeout(()=>{S.nsMsg=null;render()},4000)
   await loadAll()
 }
 
@@ -611,7 +640,10 @@ function sidebar(){
     {id:'ch_resumen',l:'CH — Resumen',r:['admin','supervisor'],b:0},
     {id:'ch_captura',l:'CH — Captura',r:['admin','coordinador']},
     {id:'ch_aprobacion',l:'CH — Aprobación',r:['admin','supervisor'],b:(S.chGastos||[]).filter(r=>r.estado==='PENDIENTE').length},
+    {id:'mis_solicitudes',l:'Mis Solicitudes',r:['vendedor','administracion']},
+    {id:'nueva_solicitud',l:'Nueva Solicitud',r:['vendedor','administracion']},
   ].filter(n=>n.r.includes(rol))
+  const esBasico=rol==='vendedor'||rol==='administracion'
   return '<aside class="sidebar">'+
     '<div class="sb-head"><div class="logo-wrap"><div class="logo-box"><span class="logo-ax">AX</span></div>'+
     '<div><span class="logo-g">Grupo</span><span class="logo-n">AVANTEX</span></div></div>'+
@@ -620,17 +652,19 @@ function sidebar(){
     nav.filter(n=>!n.id.startsWith('ch_')).map(n=>'<button class="nb '+(S.page===n.id?'on':'')+'" onclick="S.page=\''+ n.id +'\';render()">'+
       '<span class="nd"></span>'+n.l+(n.b?'<span class="nbadge">'+n.b+'</span>':'')+
     '</button>').join('')+
-    '<span class="sb-lbl" style="margin-top:10px">Capital Humano</span>'+
-    '<button class="nb" onclick="S.chOpen=!S.chOpen;render()" style="justify-content:space-between;'+((['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page)||S.chOpen)?'background:rgba(255,255,255,0.1);color:#fff;':'')+'" >'+
-    '<div style="display:flex;align-items:center;gap:9px"><span class="nd" style="background:'+((['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page)||S.chOpen)?'#fff':'rgba(255,255,255,0.25)')+'"></span>Capital Humano</div>'+
-    '<span style="font-size:10px;color:rgba(255,255,255,0.5)">'+(S.chOpen||['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page)?'▲':'▼')+'</span>'+
-    '</button>'+
-    ((S.chOpen||['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page))?
-      '<div style="margin-left:12px;border-left:1px solid rgba(255,255,255,0.12);padding-left:6px">'+
-      nav.filter(n=>n.id.startsWith('ch_')).map(n=>'<button class="nb '+(S.page===n.id?'on':'')+'" onclick="S.page=\''+ n.id +'\';render()" style="font-size:12px;padding:6px 8px">'+
-        '<span class="nd"></span>'+n.l.replace('CH — ','')+(n.b?'<span class="nbadge">'+n.b+'</span>':'')+
-      '</button>').join('')+
-      '</div>'
+    (!esBasico?
+      '<span class="sb-lbl" style="margin-top:10px">Capital Humano</span>'+
+      '<button class="nb" onclick="S.chOpen=!S.chOpen;render()" style="justify-content:space-between;'+((['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page)||S.chOpen)?'background:rgba(255,255,255,0.1);color:#fff;':'')+'" >'+
+      '<div style="display:flex;align-items:center;gap:9px"><span class="nd" style="background:'+((['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page)||S.chOpen)?'#fff':'rgba(255,255,255,0.25)')+'"></span>Capital Humano</div>'+
+      '<span style="font-size:10px;color:rgba(255,255,255,0.5)">'+(S.chOpen||['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page)?'▲':'▼')+'</span>'+
+      '</button>'+
+      ((S.chOpen||['ch_resumen','ch_captura','ch_aprobacion'].includes(S.page))?
+        '<div style="margin-left:12px;border-left:1px solid rgba(255,255,255,0.12);padding-left:6px">'+
+        nav.filter(n=>n.id.startsWith('ch_')).map(n=>'<button class="nb '+(S.page===n.id?'on':'')+'" onclick="S.page=\''+ n.id +'\';render()" style="font-size:12px;padding:6px 8px">'+
+          '<span class="nd"></span>'+n.l.replace('CH — ','')+(n.b?'<span class="nbadge">'+n.b+'</span>':'')+
+        '</button>').join('')+
+        '</div>'
+      : '')
     : '')+
     '</nav>'+
     '<div class="sb-foot">'+
@@ -986,7 +1020,7 @@ function pTecnicos(){
 
 function pUsuarios(){
   const u=S.nu
-  const rs={admin:'color:var(--navy);background:var(--navyL)',supervisor:'color:#6D28D9;background:#F5F3FF',coordinador:'color:var(--g600);background:var(--g100)'}
+  const rs={admin:'color:var(--navy);background:var(--navyL)',supervisor:'color:#6D28D9;background:#F5F3FF',coordinador:'color:var(--g600);background:var(--g100)',vendedor:'color:#7C3AED;background:#EDE9FE',administracion:'color:#C2410C;background:#FFF7ED'}
   return '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">'+
     '<div><div class="pg-t">Usuarios del sistema</div><div style="font-size:13px;color:var(--g600);margin-top:3px">Gestiona accesos, roles y zonas</div></div>'+
     '<button class="btn btn-n" onclick="S.showNu=!S.showNu;render()">+ Nuevo usuario</button>'+
@@ -1000,6 +1034,8 @@ function pUsuarios(){
     '<option value="coordinador"'+(u.rol==='coordinador'?' selected':'')+'>Coordinador</option>'+
     '<option value="supervisor"'+(u.rol==='supervisor'?' selected':'')+'>Supervisor</option>'+
     '<option value="admin"'+(u.rol==='admin'?' selected':'')+'>Admin</option>'+
+    '<option value="vendedor"'+(u.rol==='vendedor'?' selected':'')+'>Vendedor</option>'+
+    '<option value="administracion"'+(u.rol==='administracion'?' selected':'')+'>Administración</option>'+
     '</select></div></div>'+
     '<div style="margin-bottom:14px;max-width:200px"><label class="fl">Zona</label>'+
     '<select class="fi" onchange="S.nu.zona=this.value"><option value="">Sin zona</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(u.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select></div>'+
@@ -1014,11 +1050,94 @@ function pUsuarios(){
       '<option value="coordinador"'+(usr.rol==='coordinador'?' selected':'')+'>Coordinador</option>'+
       '<option value="supervisor"'+(usr.rol==='supervisor'?' selected':'')+'>Supervisor</option>'+
       '<option value="admin"'+(usr.rol==='admin'?' selected':'')+'>Admin</option>'+
+      '<option value="vendedor"'+(usr.rol==='vendedor'?' selected':'')+'>Vendedor</option>'+
+      '<option value="administracion"'+(usr.rol==='administracion'?' selected':'')+'>Administración</option>'+
       '</select></td>'+
       '<td>'+(usr.zona?'<span class="badge bz">'+usr.zona+'</span>':'<span style="color:var(--g400)">—</span>')+'</td>'+
       '<td><span class="badge '+(usr.activo?'ba':'br')+'">'+( usr.activo?'Activo':'Inactivo')+'</span></td>'+
     '</tr>').join(''):'<tr><td colspan="5" class="empty">Sin usuarios</td></tr>')
     '</tbody></table></div>'
+}
+
+function pMisSolicitudes(){
+  const mf=S.msf
+  const mis=S.presupuestos.filter(r=>
+    r.coordinador_id===S.user.id&&
+    (!mf.mes||r.mes===mf.mes)&&
+    (!mf.estado||r.estado===mf.estado)
+  )
+  const total=mis.reduce((a,r)=>a+r.monto,0)
+  return '<div class="pg-t">Mis Solicitudes</div>'+
+    '<div class="pg-s">'+mis.length+' solicitudes · Total: '+fmt(total)+'</div>'+
+    '<div class="flt">'+
+    '<select class="fs" onchange="S.msf.mes=this.value;render()"><option value="">Todos los meses</option>'+MESES.map(m=>'<option value="'+m+'"'+(mf.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select>'+
+    '<select class="fs" onchange="S.msf.estado=this.value;render()"><option value="">Todos los estados</option>'+
+    '<option value="PENDIENTE"'+(mf.estado==='PENDIENTE'?' selected':'')+'>Pendiente</option>'+
+    '<option value="APROBADO"'+(mf.estado==='APROBADO'?' selected':'')+'>Aprobado</option>'+
+    '<option value="RECHAZADO"'+(mf.estado==='RECHAZADO'?' selected':'')+'>Rechazado</option>'+
+    '</select>'+
+    '</div>'+
+    '<div class="card" style="padding:0;overflow:hidden">'+
+    '<table><thead><tr><th>Sem</th><th>Mes</th><th>Tipo</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th></tr></thead><tbody>'+
+    (mis.length?mis.map(r=>
+      '<tr>'+
+      '<td><span class="badge bs">S'+r.semana+'</span></td>'+
+      '<td style="color:var(--g600)">'+r.mes+'</td>'+
+      '<td style="font-size:11px;color:var(--g600)">'+( r.tipo||'')+'</td>'+
+      '<td>'+r.concepto+'</td>'+
+      '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
+      '<td>'+be(r.estado)+'</td>'+
+      '</tr>'
+    ).join(''):'<tr><td colspan="6" class="empty">Sin solicitudes registradas</td></tr>')
+    '</tbody></table></div>'
+}
+
+function pNuevaSolicitud(){
+  const ns=S.ns
+  const p=S.perfil
+  const recientes=S.presupuestos.filter(r=>r.coordinador_id===S.user.id).slice(0,20)
+  return '<div style="display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start">'+
+    '<div class="card" style="margin:0">'+
+    '<div class="ct" style="margin-bottom:14px">Nueva solicitud</div>'+
+    (S.nsMsg?'<div class="'+(S.nsMsg.t==='o'?'ok-msg':'err-msg')+'">'+S.nsMsg.m+'</div>':'')+
+    '<div class="fsec">Solicitante</div>'+
+    '<div style="padding:8px 10px;background:var(--navyL);border-radius:6px;font-size:12px;color:var(--navy);margin-bottom:12px">'+
+    '<strong>'+(p?p.nombre:'')+'</strong>'+(p&&p.zona?' · '+p.zona:'')+
+    '</div>'+
+    '<div class="fsec">Periodo</div>'+
+    '<div class="fr">'+
+    '<div><label class="fl">Semana</label><input class="fi" type="number" min="1" max="53" value="'+ns.semana+'" onchange="S.ns.semana=this.value"></div>'+
+    '<div><label class="fl">Mes</label><select class="fi" onchange="S.ns.mes=this.value">'+MESES.map(m=>'<option value="'+m+'"'+(ns.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Tipo</label><select class="fi" onchange="S.ns.tipo=this.value"><option value="PRESUPUESTADO"'+(ns.tipo==='PRESUPUESTADO'?' selected':'')+'>PRESUPUESTADO</option><option value="EXTRA"'+(ns.tipo==='EXTRA'?' selected':'')+'>EXTRA</option></select></div>'+
+    '</div>'+
+    '<div class="fsec">Conceptos del viaje</div>'+
+    '<div id="lineas-wrap" style="margin-bottom:10px"><p style="font-size:12px;color:var(--g400);text-align:center;padding:8px">Sin conceptos agregados</p></div>'+
+    '<div style="background:var(--g50);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">'+
+    '<div style="font-size:11px;font-weight:600;color:var(--g600);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Agregar concepto</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Concepto</label><select class="fi" id="nl-conc">'+CONCEPTOS.map(cc=>'<option>'+cc+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Tipo</label><select class="fi" id="nl-lv"><option>LOCAL</option><option>VIAJE</option></select></div>'+
+    '</div>'+
+    '<div class="fr2">'+
+    '<div><label class="fl">Monto ($MXN)</label><input class="fi" type="number" id="nl-monto" min="0" step="1" placeholder="0" style="font-size:15px;font-weight:600"></div>'+
+    '<div style="display:flex;align-items:flex-end"><button class="btn btn-n" style="width:100%;padding:9px" onclick="agregarLinea()">+ Agregar</button></div>'+
+    '</div></div>'+
+    '<div style="margin-bottom:10px"><label class="fl">Comentarios</label><input class="fi" placeholder="Opcional" value="'+(ns.nota||'')+'" onchange="S.ns.nota=this.value"></div>'+
+    '<button class="btn btn-n" id="btn-guardar" style="width:100%;padding:11px;font-size:14px" onclick="guardarNuevaSolicitud()" disabled>Guardar solicitud</button>'+
+    '</div>'+
+    '<div class="card" style="margin:0">'+
+    '<div class="ch"><div><div class="ct">Solicitudes recientes</div><div class="cs">'+recientes.length+' registros</div></div></div>'+
+    '<div class="tw"><table><thead><tr><th>Sem</th><th>Mes</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th></tr></thead><tbody>'+
+    (recientes.length?recientes.map(r=>
+      '<tr>'+
+      '<td><span class="badge bs">S'+r.semana+'</span></td>'+
+      '<td style="color:var(--g600)">'+r.mes+'</td>'+
+      '<td>'+r.concepto+'</td>'+
+      '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
+      '<td>'+be(r.estado)+'</td>'+
+      '</tr>'
+    ).join(''):'<tr><td colspan="5" class="empty">Sin solicitudes</td></tr>')+
+    '</tbody></table></div></div>'
 }
 
 function render(){
@@ -1048,8 +1167,8 @@ function render(){
     return
   }
 
-  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios',ch_resumen:'CH — Resumen',ch_captura:'CH — Captura de gasto',ch_aprobacion:'CH — Aprobación'}
-  const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios,ch_resumen:pResumenCH,ch_captura:pCapturaCH,ch_aprobacion:pAprobacionCH}
+  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios',ch_resumen:'CH — Resumen',ch_captura:'CH — Captura de gasto',ch_aprobacion:'CH — Aprobación',mis_solicitudes:'Mis Solicitudes',nueva_solicitud:'Nueva Solicitud'}
+  const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios,ch_resumen:pResumenCH,ch_captura:pCapturaCH,ch_aprobacion:pAprobacionCH,mis_solicitudes:pMisSolicitudes,nueva_solicitud:pNuevaSolicitud}
   const pageHtml=(pages[S.page]||pResumen)()
 
   root.innerHTML='<div class="app">'+sidebar()+
@@ -1062,7 +1181,7 @@ function render(){
     '<div class="content">'+pageHtml+'</div>'+
     '</div></div>'
 
-  if(S.page==='captura') renderLineas()
+  if(S.page==='captura'||S.page==='nueva_solicitud') renderLineas()
 }
 
 async function doL(){
