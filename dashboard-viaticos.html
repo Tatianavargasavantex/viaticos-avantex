@@ -141,6 +141,8 @@ let S={
   zf:'',bf:'',
   nu:{email:'',nombre:'',rol:'coordinador',zona:''},nuMsg:null,showNu:false,
   tb:'',
+  showNt2:false,nt2:{nombre:'',zona:'',ciudad:'',udn:'',coordinador:'',region:'',subsede:'',estado:''},nt2Msg:null,
+  editTec:null,editTecData:{},
   ch:{mes:'ENERO',categoria:'RECLUTAMIENTO Y SELECCION',subcategoria:'',descripcion:'',monto:'',area:'MATRIZ',semana:1},
   chMsg:null,
   chGastos:[],
@@ -320,6 +322,36 @@ async function guardarNuevoTecnico(){
 }
 
 async function setRol(id,rol){await sb.from('perfiles').update({rol}).eq('id',id);await loadAll()}
+
+async function guardarTecnicoDesdeAdmin(){
+  const n=S.nt2
+  if(!n.nombre||!n.zona){alert('Ingresa nombre y zona');return}
+  const{error}=await sb.from('tecnicos').insert({nombre:n.nombre,zona:n.zona,ciudad:n.ciudad,udn:n.udn,coordinador:n.coordinador,region:n.region,subsede:n.subsede,estado:n.estado,activo:true})
+  if(error){S.nt2Msg={t:'e',m:error.message};render();return}
+  S.nt2Msg={t:'o',m:'Técnico registrado correctamente'}
+  S.nt2={nombre:'',zona:'',ciudad:'',udn:'',coordinador:'',region:'',subsede:'',estado:''};S.showNt2=false
+  setTimeout(()=>{S.nt2Msg=null;render()},4000)
+  await loadAll()
+}
+
+function editarTecnico(id){
+  if(S.editTec===id){S.editTec=null;S.editTecData={}}
+  else{S.editTec=id;S.editTecData={...S.tecnicos.find(t=>t.id===id)}}
+  S.showNt2=false;render()
+}
+
+async function guardarEditTecnico(){
+  const d=S.editTecData
+  const{error}=await sb.from('tecnicos').update({nombre:d.nombre,zona:d.zona,ciudad:d.ciudad||'',udn:d.udn||'',coordinador:d.coordinador||'',region:d.region||'',subsede:d.subsede||'',estado:d.estado||'',activo:d.activo}).eq('id',S.editTec)
+  if(error){alert('Error: '+error.message);return}
+  S.editTec=null;S.editTecData={}
+  await loadAll()
+}
+
+async function toggleActivo(id,activo){
+  await sb.from('tecnicos').update({activo:!activo}).eq('id',id)
+  await loadAll()
+}
 
 async function crearUsuario(){
   const u=S.nu
@@ -879,16 +911,76 @@ function pTecnicos(){
     (!S.tb||t.nombre.toLowerCase().includes(S.tb.toLowerCase())||t.zona.toLowerCase().includes(S.tb.toLowerCase()))&&
     (!S.f.zona||t.zona===S.f.zona)
   )
-  return '<div class="pg-t">Catálogo de técnicos</div>'+
-    '<div class="pg-s">'+S.tecnicos.length+' técnicos registrados</div>'+
+  const n=S.nt2
+  const ed=S.editTecData
+  const REGIONES=['MATRIZ','NOROESTE','NORESTE','CENTRO','BAJIO','PACIFICO','SURESTE']
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">'+
+    '<div><div class="pg-t">Catálogo de técnicos</div><div style="font-size:13px;color:var(--g600);margin-top:3px">'+S.tecnicos.length+' técnicos registrados</div></div>'+
+    '<button class="btn btn-n" onclick="S.showNt2=!S.showNt2;S.editTec=null;S.editTecData={};render()">'+(S.showNt2?'✕ Cancelar':'+ Nuevo técnico')+'</button>'+
+    '</div>'+
+    (S.nt2Msg?'<div class="'+(S.nt2Msg.t==='o'?'ok-msg':'err-msg')+'" style="margin-bottom:16px">'+S.nt2Msg.m+'</div>':'')+
+    (S.showNt2?'<div class="card" style="margin-bottom:20px"><div class="ct" style="margin-bottom:14px">Nuevo técnico</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Nombre *</label><input class="fi" placeholder="Ej. JUAN GARCIA" value="'+(n.nombre||'')+'" oninput="S.nt2.nombre=this.value.toUpperCase()"></div>'+
+    '<div><label class="fl">Zona *</label><select class="fi" onchange="S.nt2.zona=this.value"><option value="">Selecciona...</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(n.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Ciudad</label><input class="fi" placeholder="Ej. MONTERREY" value="'+(n.ciudad||'')+'" oninput="S.nt2.ciudad=this.value.toUpperCase()"></div>'+
+    '<div><label class="fl">UDN</label><select class="fi" onchange="S.nt2.udn=this.value"><option value="">Selecciona...</option>'+UDNS.map(u=>'<option value="'+u+'"'+(n.udn===u?' selected':'')+'>'+u+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Coordinador</label><input class="fi" placeholder="Ej. MARIA LOPEZ" value="'+(n.coordinador||'')+'" oninput="S.nt2.coordinador=this.value.toUpperCase()"></div>'+
+    '<div><label class="fl">Región</label><select class="fi" onchange="S.nt2.region=this.value"><option value="">Selecciona...</option>'+REGIONES.map(r=>'<option value="'+r+'"'+(n.region===r?' selected':'')+'>'+r+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:14px">'+
+    '<div><label class="fl">Subsede Operativa</label><input class="fi" placeholder="Ej. MONTERREY NORTE" value="'+(n.subsede||'')+'" oninput="S.nt2.subsede=this.value.toUpperCase()"></div>'+
+    '<div><label class="fl">Estado República</label><input class="fi" placeholder="Ej. NUEVO LEON" value="'+(n.estado||'')+'" oninput="S.nt2.estado=this.value.toUpperCase()"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-n" onclick="guardarTecnicoDesdeAdmin()">Guardar técnico</button><button class="btn" onclick="S.showNt2=false;render()">Cancelar</button></div>'+
+    '</div>':'')+
+    (S.editTec?'<div class="card" style="margin-bottom:20px;border-left:3px solid var(--navy)"><div class="ct" style="margin-bottom:14px">Editando: '+( ed.nombre||'')+'</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Nombre *</label><input class="fi" value="'+(ed.nombre||'')+'" oninput="S.editTecData.nombre=this.value.toUpperCase()"></div>'+
+    '<div><label class="fl">Zona *</label><select class="fi" onchange="S.editTecData.zona=this.value"><option value="">Selecciona...</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(ed.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Ciudad</label><input class="fi" value="'+(ed.ciudad||'')+'" oninput="S.editTecData.ciudad=this.value.toUpperCase()"></div>'+
+    '<div><label class="fl">UDN</label><select class="fi" onchange="S.editTecData.udn=this.value"><option value="">Selecciona...</option>'+UDNS.map(u=>'<option value="'+u+'"'+(ed.udn===u?' selected':'')+'>'+u+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Coordinador</label><input class="fi" value="'+(ed.coordinador||'')+'" oninput="S.editTecData.coordinador=this.value.toUpperCase()"></div>'+
+    '<div><label class="fl">Región</label><select class="fi" onchange="S.editTecData.region=this.value"><option value="">Selecciona...</option>'+REGIONES.map(r=>'<option value="'+r+'"'+(ed.region===r?' selected':'')+'>'+r+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:14px">'+
+    '<div><label class="fl">Subsede Operativa</label><input class="fi" value="'+(ed.subsede||'')+'" oninput="S.editTecData.subsede=this.value.toUpperCase()"></div>'+
+    '<div><label class="fl">Estado República</label><input class="fi" value="'+(ed.estado||'')+'" oninput="S.editTecData.estado=this.value.toUpperCase()"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-n" onclick="guardarEditTecnico()">Guardar cambios</button><button class="btn" onclick="S.editTec=null;S.editTecData={};render()">Cancelar</button></div>'+
+    '</div>':'')+
     '<div class="flt">'+
     '<input class="fin" placeholder="Buscar nombre o zona..." value="'+(S.tb||'')+'" onchange="S.tb=this.value;render()" style="width:240px">'+
     '<select class="fs" onchange="S.f.zona=this.value;render()"><option value="">Todas las zonas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.f.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select>'+
     '<span style="font-size:12px;color:var(--g600);font-weight:500">'+tf.length+' resultados</span>'+
     '</div>'+
     '<div class="card" style="padding:0;overflow:hidden">'+
-    '<table><thead><tr><th>Nombre</th><th>Zona</th><th>Ciudad</th><th>UDN</th><th>Coordinador</th><th>Región</th><th>Subsede</th><th>Estado Rep.</th><th>Estatus</th></tr></thead><tbody>'+
-    (tf.length?tf.map(t=>'<tr><td style="font-weight:600">'+t.nombre+'</td><td><span class="badge bz">'+t.zona+'</span></td><td style="color:var(--g600)">'+t.ciudad+'</td><td style="color:var(--g600);font-size:12px">'+t.udn+'</td><td style="color:var(--g600)">'+( t.coordinador||'—')+'</td><td style="color:var(--g600)">'+( t.region||'—')+'</td><td style="color:var(--g600)">'+( t.subsede||'—')+'</td><td style="color:var(--g600)">'+( t.estado||'—')+'</td><td><span class="badge '+(t.activo?'ba':'br')+'">'+( t.activo?'Activo':'Inactivo')+'</span></td></tr>').join(''):'<tr><td colspan="9" class="empty">Sin técnicos</td></tr>')
+    '<table><thead><tr><th>Nombre</th><th>Zona</th><th>Ciudad</th><th>UDN</th><th>Coordinador</th><th>Región</th><th>Subsede</th><th>Estado Rep.</th><th>Estatus</th><th></th></tr></thead><tbody>'+
+    (tf.length?tf.map(t=>
+      '<tr'+(S.editTec===t.id?' style="background:var(--navyXL)"':'')+'>'+
+      '<td style="font-weight:600">'+t.nombre+'</td>'+
+      '<td><span class="badge bz">'+t.zona+'</span></td>'+
+      '<td style="color:var(--g600)">'+t.ciudad+'</td>'+
+      '<td style="color:var(--g600);font-size:12px">'+t.udn+'</td>'+
+      '<td style="color:var(--g600)">'+( t.coordinador||'—')+'</td>'+
+      '<td style="color:var(--g600)">'+( t.region||'—')+'</td>'+
+      '<td style="color:var(--g600)">'+( t.subsede||'—')+'</td>'+
+      '<td style="color:var(--g600)">'+( t.estado||'—')+'</td>'+
+      '<td><span class="badge '+(t.activo?'ba':'br')+'">'+( t.activo?'Activo':'Inactivo')+'</span></td>'+
+      '<td style="white-space:nowrap;text-align:right">'+
+      '<button class="btn btn-xs" style="margin-right:4px" onclick="editarTecnico(\''+t.id+'\')">✎ Editar</button>'+
+      '<button class="btn btn-xs '+(t.activo?'btn-r':'')+'" onclick="toggleActivo(\''+t.id+'\','+t.activo+')">'+(t.activo?'Desactivar':'Activar')+'</button>'+
+      '</td>'+
+      '</tr>'
+    ).join(''):'<tr><td colspan="10" class="empty">Sin técnicos</td></tr>')
     '</tbody></table></div>'
 }
 
