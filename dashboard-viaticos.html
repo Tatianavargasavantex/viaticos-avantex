@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Viáticos 2026 — Grupo Avantex</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;color:#111;font-size:14px}
@@ -151,7 +152,8 @@ let S={
   chAfe:'PENDIENTE',
   chOpen:false,
   ns:{semana:1,mes:'ENERO',anio:2026,tipo:'PRESUPUESTADO',nota:''},nsMsg:null,
-  msf:{mes:'',estado:''}
+  msf:{mes:'',estado:''},
+  importPreview:null,importProgress:null
 }
 
 const fmt=n=>'$'+Math.round(n||0).toLocaleString('es-MX')
@@ -1018,12 +1020,80 @@ function pTecnicos(){
     '</tbody></table></div>'
 }
 
+async function eliminarUsuario(id,nombre){
+  if(!confirm('¿Eliminar al usuario "'+nombre+'"? Esta acción no se puede deshacer.'))return
+  await sb.from('perfiles').delete().eq('id',id)
+  try{await sb.auth.admin.deleteUser(id)}catch(e){}
+  await loadAll()
+}
+
+function abrirImportExcel(){
+  const inp=document.createElement('input')
+  inp.type='file';inp.accept='.xlsx,.xls'
+  inp.onchange=e=>procesarExcel(e.target.files[0])
+  inp.click()
+}
+
+async function procesarExcel(file){
+  if(!file)return
+  if(typeof XLSX==='undefined'){alert('La librería Excel no está cargada aún, intenta de nuevo');return}
+  const data=await file.arrayBuffer()
+  const wb=XLSX.read(data,{type:'array'})
+  const ws=wb.Sheets[wb.SheetNames[0]]
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:''})
+  const norm=rows.map(r=>{
+    const k={}
+    Object.keys(r).forEach(key=>k[key.toLowerCase().trim()]=String(r[key]||'').trim())
+    return{nombre:k.nombre||'',email:k.email||'',rol:k.rol||'coordinador',zona:k.zona||''}
+  }).filter(r=>r.email&&r.nombre)
+  if(norm.length===0){alert('No se encontraron filas válidas. Verifica que el archivo tenga columnas: nombre, email, rol, zona');return}
+  S.importPreview=norm;S.importProgress=null;render()
+}
+
+async function confirmarImport(){
+  const rows=S.importPreview
+  S.importPreview=null
+  S.importProgress={current:0,total:rows.length,ok:0,fail:0,log:[]}
+  render()
+  for(const row of rows){
+    S.importProgress.current++
+    render()
+    const{error}=await sb.auth.signUp({email:row.email,password:'Avantex2026!',options:{data:{nombre:row.nombre,rol:row.rol,zona:row.zona||null}}})
+    if(error){
+      S.importProgress.fail++
+      S.importProgress.log.push({email:row.email,ok:false,msg:error.message})
+    }else{
+      S.importProgress.ok++
+      S.importProgress.log.push({email:row.email,ok:true})
+    }
+    render()
+  }
+  await loadAll()
+}
+
+function descargarPlantilla(){
+  if(typeof XLSX==='undefined'){alert('La librería Excel no está cargada aún, intenta de nuevo');return}
+  const ws=XLSX.utils.aoa_to_sheet([
+    ['nombre','email','rol','zona'],
+    ['Juan García','juan@grupoavantex.com','coordinador','NORESTE'],
+    ['María López','maria@grupoavantex.com','vendedor','MATRIZ'],
+    ['Carlos Ruiz','carlos@grupoavantex.com','supervisor',''],
+  ])
+  const wb=XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb,ws,'Usuarios')
+  XLSX.writeFile(wb,'plantilla_usuarios.xlsx')
+}
+
 function pUsuarios(){
   const u=S.nu
   const rs={admin:'color:var(--navy);background:var(--navyL)',supervisor:'color:#6D28D9;background:#F5F3FF',coordinador:'color:var(--g600);background:var(--g100)',vendedor:'color:#7C3AED;background:#EDE9FE',administracion:'color:#C2410C;background:#FFF7ED'}
   return '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">'+
     '<div><div class="pg-t">Usuarios del sistema</div><div style="font-size:13px;color:var(--g600);margin-top:3px">Gestiona accesos, roles y zonas</div></div>'+
+    '<div style="display:flex;gap:8px;align-items:center">'+
+    '<button class="btn btn-xs" style="color:var(--g600)" onclick="descargarPlantilla()">⬇ Plantilla</button>'+
+    '<button class="btn btn-xs" onclick="abrirImportExcel()">📥 Importar Excel</button>'+
     '<button class="btn btn-n" onclick="S.showNu=!S.showNu;render()">+ Nuevo usuario</button>'+
+    '</div>'+
     '</div>'+
     (S.nuMsg?'<div class="'+(S.nuMsg.t==='o'?'ok-msg':'err-msg')+'" style="margin-bottom:16px">'+S.nuMsg.m+'</div>':'')+
     (S.showNu?'<div class="card" style="margin-bottom:20px"><div class="ct" style="margin-bottom:14px">Crear nuevo usuario</div>'+
@@ -1041,8 +1111,29 @@ function pUsuarios(){
     '<select class="fi" onchange="S.nu.zona=this.value"><option value="">Sin zona</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(u.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select></div>'+
     '<div style="display:flex;gap:8px"><button class="btn btn-n" onclick="crearUsuario()">Crear usuario</button><button class="btn" onclick="S.showNu=false;render()">Cancelar</button></div>'+
     '</div>':'')+
+    (S.importPreview?'<div class="card" style="margin-bottom:20px;border-left:3px solid #7C3AED">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'+
+    '<div><div class="ct">Vista previa — '+S.importPreview.length+' usuarios a importar</div><div style="font-size:12px;color:var(--g600);margin-top:2px">Contraseña temporal: <strong>Avantex2026!</strong></div></div>'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-n" onclick="confirmarImport()">✓ Confirmar importación</button><button class="btn" onclick="S.importPreview=null;render()">Cancelar</button></div>'+
+    '</div>'+
+    '<div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Zona</th></tr></thead><tbody>'+
+    S.importPreview.map((r,i)=>'<tr><td style="color:var(--g400);font-size:11px">'+(i+1)+'</td><td style="font-weight:600">'+r.nombre+'</td><td style="color:var(--g600);font-size:12px">'+r.email+'</td><td><span class="badge bz">'+r.rol+'</span></td><td style="color:var(--g600)">'+( r.zona||'—')+'</td></tr>').join('')+
+    '</tbody></table></div></div>':'')+
+    (S.importProgress?'<div class="card" style="margin-bottom:20px">'+
+    (S.importProgress.current<S.importProgress.total?
+      '<div style="margin-bottom:10px"><div style="font-size:13px;font-weight:600;margin-bottom:6px">Importando '+S.importProgress.current+' de '+S.importProgress.total+'...</div>'+
+      '<div style="background:var(--g100);border-radius:6px;height:8px;overflow:hidden"><div style="background:var(--navy);height:100%;width:'+Math.round((S.importProgress.current/S.importProgress.total)*100)+'%;transition:width .3s"></div></div></div>'
+    :
+      '<div style="margin-bottom:10px"><div class="ct" style="margin-bottom:4px">Importación completada</div>'+
+      '<div style="font-size:13px;color:var(--g600)">✓ <strong style="color:var(--green)">'+S.importProgress.ok+' creados</strong>'+(S.importProgress.fail?' · ✕ <strong style="color:var(--red)">'+S.importProgress.fail+' fallidos</strong>':'')+'</div></div>'
+    )+
+    '<div style="max-height:160px;overflow-y:auto">'+
+    S.importProgress.log.map(l=>'<div style="font-size:11px;padding:3px 0;border-top:1px solid var(--g100);color:'+(l.ok?'var(--green)':'var(--red)')+'">'+( l.ok?'✓':'✕')+' '+l.email+(l.ok?'':' — '+l.msg)+'</div>').join('')+
+    '</div>'+
+    (S.importProgress.current>=S.importProgress.total?'<div style="margin-top:10px"><button class="btn" onclick="S.importProgress=null;render()">Cerrar</button></div>':'')+
+    '</div>':'')+
     '<div class="card" style="padding:0;overflow:hidden">'+
-    '<table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Zona</th><th>Estado</th></tr></thead><tbody>'+
+    '<table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Zona</th><th>Estado</th><th></th></tr></thead><tbody>'+
     (S.usuarios.length?S.usuarios.map(usr=>'<tr>'+
       '<td><div style="display:flex;align-items:center;gap:9px"><div style="width:30px;height:30px;border-radius:50%;background:var(--navyL);color:var(--navy);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">'+(usr.nombre||'?').charAt(0)+'</div><span style="font-weight:600">'+usr.nombre+'</span></div></td>'+
       '<td style="color:var(--g600);font-size:12px">'+usr.email+'</td>'+
@@ -1055,7 +1146,8 @@ function pUsuarios(){
       '</select></td>'+
       '<td>'+(usr.zona?'<span class="badge bz">'+usr.zona+'</span>':'<span style="color:var(--g400)">—</span>')+'</td>'+
       '<td><span class="badge '+(usr.activo?'ba':'br')+'">'+( usr.activo?'Activo':'Inactivo')+'</span></td>'+
-    '</tr>').join(''):'<tr><td colspan="5" class="empty">Sin usuarios</td></tr>')
+      '<td style="text-align:right"><button class="btn btn-xs btn-r" onclick="eliminarUsuario(\''+usr.id+'\',\''+( usr.nombre||'').replace(/'/g,'')+'\')" '+(usr.id===S.user.id?'disabled title="No puedes eliminarte a ti mismo"':'')+'>Eliminar</button></td>'+
+    '</tr>').join(''):'<tr><td colspan="6" class="empty">Sin usuarios</td></tr>')
     '</tbody></table></div>'
 }
 
