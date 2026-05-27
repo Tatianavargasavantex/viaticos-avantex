@@ -278,7 +278,7 @@ async function guardarPresupuesto(){
   const rows=S.lineas.map(l=>({
     semana:parseInt(S.cap.semana),mes:S.cap.mes,anio:parseInt(S.cap.anio),
     tipo:S.cap.tipo,tecnico_id:S.cap.tid,tecnico_nombre:tec.nombre,
-    zona:tec.zona,ciudad:tec.ciudad||'',udn:tec.udn||'',
+    zona:tec.zona,ciudad:tec.ciudad||'',udn:tec.udn||'',coordinador:tec.coordinador||'',
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
     comentarios:S.cap.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE'
   }))
@@ -305,8 +305,12 @@ async function guardarNuevoTecnico(){
   const zona=document.getElementById('nt-zona').value
   const ciudad=document.getElementById('nt-ciudad').value.trim().toUpperCase()
   const udn=document.getElementById('nt-udn').value
+  const coordinador=document.getElementById('nt-coordinador').value.trim().toUpperCase()
+  const region=document.getElementById('nt-region').value
+  const subsede=document.getElementById('nt-subsede').value.trim().toUpperCase()
+  const estado=document.getElementById('nt-estado').value.trim().toUpperCase()
   if(!nombre||!zona){alert('Ingresa nombre y zona');return}
-  const{data,error}=await sb.from('tecnicos').insert({nombre,zona,ciudad,udn,activo:true}).select().single()
+  const{data,error}=await sb.from('tecnicos').insert({nombre,zona,ciudad,udn,coordinador,region,subsede,estado,activo:true}).select().single()
   if(error){alert('Error: '+error.message);return}
   await loadAll()
   S.cap.tid=data.id
@@ -718,7 +722,7 @@ function pCaptura(){
     '<option value="">— Selecciona un técnico —</option>'+
     tf.map(t=>'<option value="'+t.id+'"'+(c.tid===t.id?' selected':'')+'>'+t.nombre+' · '+(t.ciudad||'')+'</option>').join('')+
     '</select>'+
-    (ts?'<div style="padding:6px 10px;background:var(--navyL);border-radius:6px;font-size:11px;color:var(--navy);margin-bottom:8px"><strong>'+ts.nombre+'</strong> · '+ts.zona+' · '+(ts.udn||'')+' · '+(ts.ciudad||'')+'</div>':'')+
+    (ts?'<div style="padding:6px 10px;background:var(--navyL);border-radius:6px;font-size:11px;color:var(--navy);margin-bottom:8px"><strong>'+ts.nombre+'</strong> · '+ts.zona+' · '+(ts.udn||'')+' · '+(ts.ciudad||'')+(ts.coordinador?' · Coord: <strong>'+ts.coordinador+'</strong>':'')+'</div>':'')+
     '<div style="margin-bottom:10px">'+
     '<button class="btn" id="btn-nt" style="width:100%;font-size:12px;color:var(--navy);border-color:var(--navyL);background:var(--navyXL)" onclick="toggleNT()">+ Registrar técnico nuevo</button>'+
     '<div id="nt-form" style="display:none;margin-top:8px;background:var(--g50);border:1px solid var(--border);border-radius:8px;padding:12px">'+
@@ -730,6 +734,14 @@ function pCaptura(){
     '<div class="fr2" style="margin-bottom:8px">'+
     '<div><label class="fl">Ciudad</label><input class="fi" id="nt-ciudad" placeholder="Ej. MONTERREY"></div>'+
     '<div><label class="fl">UDN</label><select class="fi" id="nt-udn">'+UDNS.map(u=>'<option>'+u+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Coordinador</label><input class="fi" id="nt-coordinador" placeholder="Ej. MARIA LOPEZ"></div>'+
+    '<div><label class="fl">Región</label><select class="fi" id="nt-region"><option value="">Selecciona...</option><option>MATRIZ</option><option>NOROESTE</option><option>NORESTE</option><option>CENTRO</option><option>BAJIO</option><option>PACIFICO</option><option>SURESTE</option></select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Subsede Operativa</label><input class="fi" id="nt-subsede" placeholder="Ej. MONTERREY NORTE"></div>'+
+    '<div><label class="fl">Estado República</label><input class="fi" id="nt-estado" placeholder="Ej. NUEVO LEON"></div>'+
     '</div>'+
     '<button class="btn btn-n" style="width:100%" onclick="guardarNuevoTecnico()">Guardar técnico</button>'+
     '</div></div>'+
@@ -875,8 +887,8 @@ function pTecnicos(){
     '<span style="font-size:12px;color:var(--g600);font-weight:500">'+tf.length+' resultados</span>'+
     '</div>'+
     '<div class="card" style="padding:0;overflow:hidden">'+
-    '<table><thead><tr><th>Nombre</th><th>Zona</th><th>Ciudad</th><th>UDN</th><th>Estado</th></tr></thead><tbody>'+
-    (tf.length?tf.map(t=>'<tr><td style="font-weight:600">'+t.nombre+'</td><td><span class="badge bz">'+t.zona+'</span></td><td style="color:var(--g600)">'+t.ciudad+'</td><td style="color:var(--g600);font-size:12px">'+t.udn+'</td><td><span class="badge '+(t.activo?'ba':'br')+'">'+( t.activo?'Activo':'Inactivo')+'</span></td></tr>').join(''):'<tr><td colspan="5" class="empty">Sin técnicos</td></tr>')
+    '<table><thead><tr><th>Nombre</th><th>Zona</th><th>Ciudad</th><th>UDN</th><th>Coordinador</th><th>Región</th><th>Subsede</th><th>Estado Rep.</th><th>Estatus</th></tr></thead><tbody>'+
+    (tf.length?tf.map(t=>'<tr><td style="font-weight:600">'+t.nombre+'</td><td><span class="badge bz">'+t.zona+'</span></td><td style="color:var(--g600)">'+t.ciudad+'</td><td style="color:var(--g600);font-size:12px">'+t.udn+'</td><td style="color:var(--g600)">'+( t.coordinador||'—')+'</td><td style="color:var(--g600)">'+( t.region||'—')+'</td><td style="color:var(--g600)">'+( t.subsede||'—')+'</td><td style="color:var(--g600)">'+( t.estado||'—')+'</td><td><span class="badge '+(t.activo?'ba':'br')+'">'+( t.activo?'Activo':'Inactivo')+'</span></td></tr>').join(''):'<tr><td colspan="9" class="empty">Sin técnicos</td></tr>')
     '</tbody></table></div>'
 }
 
