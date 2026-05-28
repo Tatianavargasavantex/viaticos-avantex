@@ -153,6 +153,7 @@ let S={
   chOpen:false,
   ns:{semana:1,mes:'ENERO',anio:2026,tipo:'PRESUPUESTADO',nota:''},nsMsg:null,
   msf:{mes:'',estado:''},
+  editPres:null,editPresData:{},
   importPreview:null,importProgress:null
 }
 
@@ -195,6 +196,7 @@ async function loadAll(){
   S.loading=false
   const _rol=S.perfil?S.perfil.rol:null
   if((_rol==='vendedor'||_rol==='administracion')&&!['mis_solicitudes','nueva_solicitud'].includes(S.page))S.page='mis_solicitudes'
+  if(_rol==='coordinador'&&!['captura','mis_solicitudes','tecnicos'].includes(S.page))S.page='captura'
   render()
 }
 
@@ -633,19 +635,19 @@ function sidebar(){
   const rol=S.perfil?S.perfil.rol:'coordinador'
   const pend=S.presupuestos.filter(r=>r.estado==='PENDIENTE').length
   const nav=[
-    {id:'resumen',l:'Resumen',r:['admin','coordinador','supervisor']},
+    {id:'resumen',l:'Resumen',r:['admin','supervisor']},
     {id:'captura',l:'Captura',r:['admin','coordinador']},
     {id:'aprobacion',l:'Aprobación',r:['admin','supervisor'],b:pend},
     {id:'comparativo',l:'Comparativo banco',r:['admin','supervisor']},
     {id:'tecnicos',l:'Técnicos',r:['admin','coordinador','supervisor']},
     {id:'usuarios',l:'Usuarios',r:['admin']},
     {id:'ch_resumen',l:'CH — Resumen',r:['admin','supervisor'],b:0},
-    {id:'ch_captura',l:'CH — Captura',r:['admin','coordinador']},
+    {id:'ch_captura',l:'CH — Captura',r:['admin']},
     {id:'ch_aprobacion',l:'CH — Aprobación',r:['admin','supervisor'],b:(S.chGastos||[]).filter(r=>r.estado==='PENDIENTE').length},
-    {id:'mis_solicitudes',l:'Mis Solicitudes',r:['vendedor','administracion']},
+    {id:'mis_solicitudes',l:'Mis Solicitudes',r:['vendedor','administracion','coordinador']},
     {id:'nueva_solicitud',l:'Nueva Solicitud',r:['vendedor','administracion']},
   ].filter(n=>n.r.includes(rol))
-  const esBasico=rol==='vendedor'||rol==='administracion'
+  const esBasico=rol==='vendedor'||rol==='administracion'||rol==='coordinador'
   return '<aside class="sidebar">'+
     '<div class="sb-head"><div class="logo-wrap"><div class="logo-box"><span class="logo-ax">AX</span></div>'+
     '<div><span class="logo-g">Grupo</span><span class="logo-n">AVANTEX</span></div></div>'+
@@ -1151,6 +1153,28 @@ function pUsuarios(){
     '</tbody></table></div>'
 }
 
+function abrirEditPres(id){
+  if(S.editPres===id){S.editPres=null;S.editPresData={}}
+  else{S.editPres=id;S.editPresData={...S.presupuestos.find(r=>r.id===id)}}
+  render()
+}
+
+async function guardarEditPres(){
+  const d=S.editPresData
+  if(!d.concepto||!d.monto){alert('Completa concepto y monto');return}
+  const{error}=await sb.from('presupuestos').update({
+    semana:parseInt(d.semana),
+    mes:d.mes,
+    concepto:d.concepto,
+    monto:parseFloat(d.monto),
+    local_viaje:d.local_viaje||'LOCAL',
+    comentarios:d.comentarios||null,
+  }).eq('id',S.editPres)
+  if(error){alert('Error: '+error.message);return}
+  S.editPres=null;S.editPresData={}
+  await loadAll()
+}
+
 function pMisSolicitudes(){
   const mf=S.msf
   const uid=S.user.id
@@ -1160,6 +1184,7 @@ function pMisSolicitudes(){
     (!mf.estado||r.estado===mf.estado)
   )
   const total=mis.reduce((a,r)=>a+r.monto,0)
+  const ed=S.editPresData
   return '<div class="pg-t">Mis Solicitudes</div>'+
     '<div class="pg-s">'+mis.length+' solicitudes · Total: '+fmt(total)+'</div>'+
     '<div class="flt">'+
@@ -1170,17 +1195,35 @@ function pMisSolicitudes(){
     '<option value="RECHAZADO"'+(mf.estado==='RECHAZADO'?' selected':'')+'>Rechazado</option>'+
     '</select>'+
     '</div>'+
+    (S.editPres?'<div class="card" style="margin-bottom:20px;border-left:3px solid var(--navy)"><div class="ct" style="margin-bottom:14px">Editando registro</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Semana</label><input class="fi" type="number" min="1" max="53" value="'+(ed.semana||'')+'" oninput="S.editPresData.semana=this.value"></div>'+
+    '<div><label class="fl">Mes</label><select class="fi" onchange="S.editPresData.mes=this.value">'+MESES.map(m=>'<option value="'+m+'"'+(ed.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:8px">'+
+    '<div><label class="fl">Concepto</label><select class="fi" onchange="S.editPresData.concepto=this.value">'+CONCEPTOS.map(c=>'<option value="'+c+'"'+(ed.concepto===c?' selected':'')+'>'+c+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Local / Viaje</label><select class="fi" onchange="S.editPresData.local_viaje=this.value"><option value="LOCAL"'+(ed.local_viaje==='LOCAL'?' selected':'')+'>LOCAL</option><option value="VIAJE"'+(ed.local_viaje==='VIAJE'?' selected':'')+'>VIAJE</option></select></div>'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:14px">'+
+    '<div><label class="fl">Monto ($MXN)</label><input class="fi" type="number" min="0" step="1" value="'+(ed.monto||'')+'" oninput="S.editPresData.monto=this.value" style="font-weight:600"></div>'+
+    '<div><label class="fl">Comentarios</label><input class="fi" placeholder="Opcional" value="'+(ed.comentarios||'')+'" oninput="S.editPresData.comentarios=this.value"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-n" onclick="guardarEditPres()">Guardar cambios</button><button class="btn" onclick="S.editPres=null;S.editPresData={};render()">Cancelar</button></div>'+
+    '</div>':'')+
     '<div class="card" style="padding:0;overflow:hidden">'+
-    '<table><thead><tr><th>Sem</th><th>Mes</th><th>Tipo</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th></th></tr></thead><tbody>'+
+    '<table><thead><tr><th>Sem</th><th>Mes</th><th>Técnico</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th></th></tr></thead><tbody>'+
     (mis.length?mis.map(r=>
-      '<tr>'+
+      '<tr'+(S.editPres===r.id?' style="background:var(--navyXL)"':'')+'>'+
       '<td><span class="badge bs">S'+r.semana+'</span></td>'+
       '<td style="color:var(--g600)">'+r.mes+'</td>'+
-      '<td style="font-size:11px;color:var(--g600)">'+( r.tipo||'')+'</td>'+
+      '<td style="font-size:12px">'+( r.tecnico_nombre||'—')+'</td>'+
       '<td>'+r.concepto+'</td>'+
       '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
       '<td>'+be(r.estado)+'</td>'+
-      '<td>'+(r.estado==='PENDIENTE'?'<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="delPres(\''+r.id+'\')">✕</button>':'')+'</td>'+
+      '<td style="white-space:nowrap;text-align:right">'+
+      '<button class="btn btn-xs" style="margin-right:4px" onclick="abrirEditPres(\''+r.id+'\')">✎ Editar</button>'+
+      '<button class="btn btn-xs btn-r" onclick="delPres(\''+r.id+'\')">✕ Eliminar</button>'+
+      '</td>'+
       '</tr>'
     ).join(''):'<tr><td colspan="7" class="empty">Sin solicitudes registradas</td></tr>')
     '</tbody></table></div>'
