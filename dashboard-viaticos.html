@@ -182,9 +182,12 @@ function filBanco(arr){
 
 async function loadAll(){
   S.loading=true;render()
+  const esCoord=S.perfil&&S.perfil.rol==='coordinador'
+  let tecQuery=sb.from('tecnicos').select('*').eq('activo',true).order('nombre')
+  if(esCoord&&S.perfil.nombre)tecQuery=tecQuery.ilike('coordinador',S.perfil.nombre)
   const[p,t,u,g]=await Promise.all([
     sb.from('presupuestos').select('*').order('creado_en',{ascending:false}).limit(5000),
-    sb.from('tecnicos').select('*').eq('activo',true).order('nombre'),
+    tecQuery,
     sb.from('perfiles').select('*').order('nombre'),
     sb.from('gastos_banco').select('*').order('creado_en',{ascending:false}).limit(5000),
   ])
