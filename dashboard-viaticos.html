@@ -310,8 +310,8 @@ async function guardarNuevaSolicitud(){
   const ns=S.ns
   const rows=S.lineas.map(l=>({
     semana:parseInt(ns.semana),mes:ns.mes,anio:parseInt(ns.anio),
-    tipo:ns.tipo,tecnico_id:null,tecnico_nombre:p.nombre,
-    zona:p.zona||'',ciudad:'',udn:'',coordinador:'',
+    tipo:ns.tipo,tecnico_id:S.user.id,tecnico_nombre:p.nombre,
+    zona:p.zona||'MATRIZ',ciudad:'',udn:'',coordinador:'',
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
     comentarios:ns.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE'
   }))
@@ -859,7 +859,7 @@ function pAprobacion(){
   const totSel=Array.from(sel).reduce((a,id)=>{const r=S.presupuestos.find(r=>r.id===id);return a+(r?r.monto:0)},0)
 
   return '<div class="pg-t">Aprobación de presupuestos</div>'+
-    '<div class="pg-s">Autoriza o rechaza registros de los coordinadores</div>'+
+    '<div class="pg-s">Autoriza o rechaza solicitudes pendientes de aprobación</div>'+
     '<div class="g3">'+
     '<div class="kpi amb"><div class="kl">Pendientes</div><div class="kv" style="color:var(--amber)">'+pend+'</div><div class="ks">requieren acción</div></div>'+
     '<div class="kpi grn"><div class="kl">Aprobados</div><div class="kv" style="color:var(--green)">'+apro+'</div></div>'+
@@ -879,7 +879,7 @@ function pAprobacion(){
     '<div class="card" style="padding:0;overflow:hidden">'+
     '<table><thead><tr>'+
     '<th style="width:36px"><input type="checkbox" onchange="var ids=S.presupuestos.filter(r=>r.estado===\'PENDIENTE\').map(r=>r.id);S.sel=this.checked?new Set(ids):new Set();render()"></th>'+
-    '<th>Técnico</th><th>Zona</th><th>Concepto</th><th>Comentario</th><th>Sem/Mes</th><th style="text-align:right">Monto solicitado</th><th style="text-align:right">Monto a aprobar</th><th>Estado</th><th>Acciones</th>'+
+    '<th>Solicitante</th><th>Zona</th><th>Concepto</th><th>Comentario</th><th>Sem/Mes</th><th style="text-align:right">Monto solicitado</th><th style="text-align:right">Monto a aprobar</th><th>Estado</th><th>Acciones</th>'+
     '</tr></thead><tbody>'+
     (data.length?data.map(r=>'<tr>'+
       '<td>'+(r.estado==='PENDIENTE'?'<input type="checkbox"'+(sel.has(r.id)?' checked':'')+' onchange="S.sel[this.checked?\'add\':\'delete\'](\''+ r.id +'\');render()">':'')+'</td>'+
@@ -1153,8 +1153,9 @@ function pUsuarios(){
 
 function pMisSolicitudes(){
   const mf=S.msf
+  const uid=S.user.id
   const mis=S.presupuestos.filter(r=>
-    r.coordinador_id===S.user.id&&
+    (r.coordinador_id===uid||r.tecnico_id===uid)&&
     (!mf.mes||r.mes===mf.mes)&&
     (!mf.estado||r.estado===mf.estado)
   )
@@ -1170,7 +1171,7 @@ function pMisSolicitudes(){
     '</select>'+
     '</div>'+
     '<div class="card" style="padding:0;overflow:hidden">'+
-    '<table><thead><tr><th>Sem</th><th>Mes</th><th>Tipo</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th></tr></thead><tbody>'+
+    '<table><thead><tr><th>Sem</th><th>Mes</th><th>Tipo</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th></th></tr></thead><tbody>'+
     (mis.length?mis.map(r=>
       '<tr>'+
       '<td><span class="badge bs">S'+r.semana+'</span></td>'+
@@ -1179,8 +1180,9 @@ function pMisSolicitudes(){
       '<td>'+r.concepto+'</td>'+
       '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
       '<td>'+be(r.estado)+'</td>'+
+      '<td>'+(r.estado==='PENDIENTE'?'<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="delPres(\''+r.id+'\')">✕</button>':'')+'</td>'+
       '</tr>'
-    ).join(''):'<tr><td colspan="6" class="empty">Sin solicitudes registradas</td></tr>')
+    ).join(''):'<tr><td colspan="7" class="empty">Sin solicitudes registradas</td></tr>')
     '</tbody></table></div>'
 }
 
