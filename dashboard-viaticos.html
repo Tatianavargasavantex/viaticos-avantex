@@ -138,7 +138,7 @@ let S={
   afe:'PENDIENTE',afz:'',afb:'',afn:'',
   f2:{zona:'',tecnico:''},
   lineas:[],capMsg:null,
-  cap:{semana:1,mes:'ENERO',anio:2026,tipo:'PRESUPUESTADO',tid:'',nota:''},
+  cap:(()=>{const _h=new Date(),_d=_h.getDate(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',tid:'',nota:''};})(),
   zf:'',bf:'',
   nu:{email:'',nombre:'',rol:'coordinador',zona:''},nuMsg:null,showNu:false,
   tb:'',
@@ -186,16 +186,16 @@ async function loadAll(){
   let tecQuery=sb.from('tecnicos').select('*').eq('activo',true).order('nombre')
   if(esCoord&&S.perfil.nombre)tecQuery=tecQuery.ilike('coordinador',S.perfil.nombre)
   const[p,t,u,g]=await Promise.all([
-    sb.from('presupuestos').select('*').order('creado_en',{ascending:false}).limit(5000),
+    sb.from('presupuestos').select('*').order('creado_en',{ascending:false}).limit(20000),
     tecQuery,
     sb.from('perfiles').select('*').order('nombre'),
-    sb.from('gastos_banco').select('*').order('creado_en',{ascending:false}).limit(5000),
+    sb.from('gastos_banco').select('*').order('creado_en',{ascending:false}).limit(20000),
   ])
   S.presupuestos=p.data||[]
   S.tecnicos=t.data||[]
   S.usuarios=u.data||[]
   S.banco=g.data||[]
-  try{const ch=await sb.from('ch_gastos').select('*').order('creado_en',{ascending:false}).limit(2000);S.chGastos=ch.data||[]}catch(e){S.chGastos=[]}
+  try{const ch=await sb.from('ch_gastos').select('*').order('creado_en',{ascending:false}).limit(20000);S.chGastos=ch.data||[]}catch(e){S.chGastos=[]}
   S.loading=false
   const _rol=S.perfil?S.perfil.rol:null
   if((_rol==='vendedor'||_rol==='administracion')&&!['mis_solicitudes','nueva_solicitud'].includes(S.page))S.page='mis_solicitudes'
