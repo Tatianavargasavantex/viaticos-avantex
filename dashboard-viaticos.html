@@ -154,7 +154,8 @@ let S={
   ns:{semana:1,mes:'ENERO',anio:2026,tipo:'PRESUPUESTADO',nota:''},nsMsg:null,
   msf:{mes:'',estado:''},
   editPres:null,editPresData:{},
-  importPreview:null,importProgress:null
+  importPreview:null,importProgress:null,
+  generandoFijos:false
 }
 
 const fmt=n=>'$'+Math.round(n||0).toLocaleString('es-MX')
@@ -306,6 +307,40 @@ async function guardarPresupuesto(){
   S.capMsg={t:'o',m:rows.length+' concepto(s) guardados · Total: '+fmt(total)}
   S.lineas=[];S.cap={...S.cap,tid:'',nota:''}
   setTimeout(()=>{S.capMsg=null;render()},4000)
+  await loadAll()
+}
+
+async function generarPresupuestosFijos(){
+  if(S.generandoFijos)return
+  S.generandoFijos=true
+  S.capMsg={t:'o',m:'Generando presupuestos fijos...'}
+  render()
+  const _h=new Date(),_d=_h.getDate()
+  const _meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE']
+  const semana=_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5
+  const mes=_meses[_h.getMonth()]
+  const anio=2026
+  const{data:fijos,error:ef}=await sb.from('presupuestos_fijos').select('*').eq('activo',true)
+  if(ef){S.capMsg={t:'e',m:'Error leyendo fijos: '+ef.message};S.generandoFijos=false;render();return}
+  if(!fijos||fijos.length===0){S.capMsg={t:'e',m:'No hay presupuestos fijos activos.'};S.generandoFijos=false;render();return}
+  let generados=0,omitidos=0
+  for(const f of fijos){
+    const{data:dup}=await sb.from('presupuestos').select('id')
+      .eq('tecnico_nombre',f.tecnico_nombre).eq('concepto',f.concepto)
+      .eq('semana',semana).eq('mes',mes).eq('anio',anio).limit(1)
+    if(dup&&dup.length>0){omitidos++;continue}
+    const{error:ei}=await sb.from('presupuestos').insert([{
+      semana,mes,anio,tipo:'PRESUPUESTADO',
+      tecnico_nombre:f.tecnico_nombre,zona:f.zona,ciudad:f.ciudad,
+      concepto:f.concepto,monto:f.monto,local_viaje:f.local_viaje,
+      coordinador_id:S.user.id,estado:'PENDIENTE'
+    }])
+    if(ei)omitidos++
+    else generados++
+  }
+  S.capMsg={t:'o',m:'✓ '+generados+' generados · '+omitidos+' ya existían'}
+  S.generandoFijos=false
+  setTimeout(()=>{S.capMsg=null;render()},5000)
   await loadAll()
 }
 
@@ -774,7 +809,13 @@ function pCaptura(){
   const regs=fil(S.presupuestos).slice(0,100)
   const total=S.lineas.reduce((a,l)=>a+l.monto,0)
 
-  return '<div class="pg-t">Captura de presupuesto</div>'+
+  const _rol=S.perfil?S.perfil.rol:null
+  const _esAdminOCoord=_rol==='admin'||_rol==='coordinador'
+  return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'+
+    '<div class="pg-t" style="margin-bottom:0">Captura de presupuesto</div>'+
+    (_esAdminOCoord?'<button class="btn btn-n btn-sm" onclick="generarPresupuestosFijos()"'+
+      (S.generandoFijos?' disabled style="opacity:.6"':'')+'>⚡ Generar semana actual</button>':'')+
+    '</div>'+
     '<div class="pg-s">Registra el presupuesto semanal por técnico</div>'+
     '<div style="display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start">'+
     '<div class="card" style="margin:0">'+
