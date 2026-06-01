@@ -151,7 +151,7 @@ let S={
   chSel:new Set(),
   chAfe:'PENDIENTE',
   chOpen:false,
-  ns:{semana:1,mes:'ENERO',anio:2026,tipo:'PRESUPUESTADO',nota:'',fecha_dispersion:''},nsMsg:null,
+  ns:(()=>{const _h=new Date(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:Math.ceil(_h.getDate()/7),mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',nota:'',fecha_dispersion:''};})(),nsMsg:null,
   msf:{mes:'',estado:''},
   editPres:null,editPresData:{},
   importPreview:null,importProgress:null,
@@ -712,7 +712,7 @@ function sidebar(){
     {id:'ch_captura',l:'CH — Captura',r:['admin']},
     {id:'ch_aprobacion',l:'CH — Aprobación',r:['admin','supervisor'],b:(S.chGastos||[]).filter(r=>r.estado==='PENDIENTE').length},
     {id:'mis_solicitudes',l:'Mis Solicitudes',r:['vendedor','administracion','coordinador']},
-    {id:'nueva_solicitud',l:'Nueva Solicitud',r:['vendedor','administracion']},
+    {id:'nueva_solicitud',l:'Nueva Solicitud',r:['admin','supervisor','coordinador','vendedor','administracion']},
   ].filter(n=>n.r.includes(rol))
   const esBasico=rol==='vendedor'||rol==='administracion'||rol==='coordinador'
   return '<aside class="sidebar">'+
