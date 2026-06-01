@@ -138,7 +138,7 @@ let S={
   afe:'PENDIENTE',afz:'',afb:'',afn:'',afd_desde:(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1).toISOString().split('T')[0]})(),afd_hasta:(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().split('T')[0]})(),afed:'',
   f2:{zona:'',tecnico:''},
   lineas:[],capMsg:null,
-  cap:(()=>{const _h=new Date(),_d=_h.getDate(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',tid:'',nota:'',fecha_dispersion:'',ruta:''};})(),
+  cap:(()=>{const _h=new Date(),_d=_h.getDate(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),
   zf:'',bf:'',
   nu:{email:'',nombre:'',rol:'coordinador',zona:''},nuMsg:null,showNu:false,
   tb:'',
@@ -151,7 +151,7 @@ let S={
   chSel:new Set(),
   chAfe:'PENDIENTE',
   chOpen:false,
-  ns:(()=>{const _h=new Date(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:Math.ceil(_h.getDate()/7),mes:_meses[_h.getMonth()],anio:_h.getFullYear(),nota:'',fecha_dispersion:'',ruta:''};})(),nsMsg:null,
+  ns:(()=>{const _h=new Date(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:Math.ceil(_h.getDate()/7),mes:_meses[_h.getMonth()],anio:_h.getFullYear(),nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),nsMsg:null,
   msf:{mes:'',estado:''},
   editPres:null,editPresData:{},
   importPreview:null,importProgress:null,
@@ -395,13 +395,14 @@ async function guardarPresupuesto(){
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
     comentarios:c.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE',
     fecha_dispersion:c.fecha_dispersion,estado_dispersion:'pendiente',
+    fecha_inicio_viaje:c.fecha_inicio_viaje||null,fecha_fin_viaje:c.fecha_fin_viaje||null,
     ruta:c.ruta||null
   }))
   const{error}=await sb.from('presupuestos').insert(rows)
   if(error){S.capMsg={t:'e',m:error.message};render();return}
   const total=S.lineas.reduce((a,l)=>a+l.monto,0)
   S.capMsg={t:'o',m:rows.length+' concepto(s) guardados · Total: '+fmt(total)}
-  S.lineas=[];S.cap={...S.cap,tid:'',nota:'',fecha_dispersion:'',ruta:''}
+  S.lineas=[];S.cap={...S.cap,tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''}
   setTimeout(()=>{S.capMsg=null;render()},4000)
   await loadAll()
 }
@@ -761,7 +762,7 @@ function sidebar(){
     {id:'ch_captura',l:'CH — Captura',r:['admin']},
     {id:'ch_aprobacion',l:'CH — Aprobación',r:['admin','supervisor'],b:(S.chGastos||[]).filter(r=>r.estado==='PENDIENTE').length},
     {id:'mis_solicitudes',l:'Mis Solicitudes',r:['vendedor','administracion','coordinador']},
-    {id:'nueva_solicitud',l:'Nueva Solicitud',r:['vendedor','administracion']},
+    {id:'nueva_solicitud',l:'Solicitud Extra',r:['vendedor','administracion']},
   ].filter(n=>n.r.includes(rol))
   const esBasico=rol==='vendedor'||rol==='administracion'||rol==='coordinador'
   return '<aside class="sidebar">'+
@@ -948,6 +949,10 @@ function pCaptura(){
     '<label class="fl" style="color:var(--red)">¿Cuándo necesitas el dinero? *</label>'+
     '<input type="date" class="fi" value="'+(c.fecha_dispersion||'')+'" onchange="S.cap.fecha_dispersion=this.value" style="width:100%;font-size:14px">'+
     '</div>'+
+    '<div class="fr2" style="margin-bottom:12px">'+
+    '<div><label class="fl">Fecha inicio de viaje</label><input type="date" class="fi" value="'+(c.fecha_inicio_viaje||'')+'" onchange="S.cap.fecha_inicio_viaje=this.value"></div>'+
+    '<div><label class="fl">Fecha fin de viaje</label><input type="date" class="fi" value="'+(c.fecha_fin_viaje||'')+'" onchange="S.cap.fecha_fin_viaje=this.value"></div>'+
+    '</div>'+
     '<div style="margin-bottom:12px">'+
     '<label class="fl">Ruta</label>'+
     '<input class="fi" list="cap-rutas-list" placeholder="Busca tu ruta..." value="'+(c.ruta||'')+'" oninput="S.cap.ruta=this.value" style="width:100%">'+
@@ -1087,7 +1092,7 @@ function pAprobacion(){
     '<div class="card" style="padding:0;overflow:hidden">'+
     '<table><thead><tr>'+
     '<th style="width:36px"><input type="checkbox" onchange="var ids=S.presupuestos.filter(r=>r.estado===\'PENDIENTE\').map(r=>r.id);S.sel=this.checked?new Set(ids):new Set();render()"></th>'+
-    '<th>Solicitante</th><th>Zona</th><th>Ruta</th><th>Concepto</th><th>Comentario</th><th>Fecha disp.</th><th>Sem/Mes</th><th style="text-align:right">Monto solicitado</th><th style="text-align:right">Monto a aprobar</th><th>Estado</th><th>Acciones</th>'+
+    '<th>Solicitante</th><th>Zona</th><th>Ruta</th><th>Concepto</th><th>Comentario</th><th>Fecha disp.</th><th>Inicio viaje</th><th>Fin viaje</th><th>Sem/Mes</th><th style="text-align:right">Monto solicitado</th><th style="text-align:right">Monto a aprobar</th><th>Estado</th><th>Acciones</th>'+
     '</tr></thead><tbody>'+
     (data.length?data.map(r=>{
       const estaDisp=r.estado_dispersion==='dispersado'
@@ -1100,6 +1105,8 @@ function pAprobacion(){
         '<td style="font-size:12px;color:var(--g600)">'+r.concepto+'</td>'+
         '<td><div class="comentario-cell" title="'+(r.comentarios||'')+'">'+( r.comentarios||'<span style="color:var(--g400);font-style:italic;font-size:11px">—</span>')+'</div></td>'+
         '<td style="font-size:12px;white-space:nowrap">'+(r.fecha_dispersion?'<span style="color:var(--amber);font-weight:600">'+r.fecha_dispersion+'</span>':'<span style="color:var(--g400)">—</span>')+'</td>'+
+        '<td style="font-size:11px;white-space:nowrap;color:var(--g600)">'+(r.fecha_inicio_viaje||'<span style="color:var(--g400)">—</span>')+'</td>'+
+        '<td style="font-size:11px;white-space:nowrap;color:var(--g600)">'+(r.fecha_fin_viaje||'<span style="color:var(--g400)">—</span>')+'</td>'+
         '<td><span class="badge bs">S'+r.semana+'</span> <span style="color:var(--g600);font-size:12px">'+r.mes+'</span></td>'+
         '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
         '<td style="text-align:right">'+(r.estado==='PENDIENTE'?'<input type="number" id="me-'+r.id+'" value="'+r.monto+'" min="0" step="1" style="width:90px;padding:3px 6px;border:1.5px solid #BFDBFE;border-radius:6px;font-size:12px;text-align:right;font-weight:600">':fmt(r.monto))+'</td>'+
@@ -1116,7 +1123,7 @@ function pAprobacion(){
             '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
         (esAdmin?' <button class="btn btn-xs" style="color:var(--red);background:#FFF1F2;border-color:#FECACA;margin-left:6px" onclick="eliminarSolicitud(\''+r.id+'\')" title="Eliminar solicitud">🗑</button>':'')+
         '</td></tr>'
-    }).join(''):'<tr><td colspan="12" class="empty">Sin registros</td></tr>')
+    }).join(''):'<tr><td colspan="14" class="empty">Sin registros</td></tr>')
     '</tbody></table></div>'
 }
 
@@ -1469,13 +1476,14 @@ async function guardarNuevaSolicitud(){
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
     comentarios:ns.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE',
     fecha_dispersion:ns.fecha_dispersion,estado_dispersion:'pendiente',
+    fecha_inicio_viaje:ns.fecha_inicio_viaje||null,fecha_fin_viaje:ns.fecha_fin_viaje||null,
     ruta:ns.ruta||null
   }))
   const{error}=await sb.from('presupuestos').insert(rows)
   if(error){S.nsMsg={t:'e',m:error.message};render();return}
   const total=S.lineas.reduce((a,l)=>a+l.monto,0)
   S.nsMsg={t:'o',m:rows.length+' concepto(s) guardados · Total: '+fmt(total)}
-  S.lineas=[];S.ns={...S.ns,nota:'',fecha_dispersion:'',ruta:''}
+  S.lineas=[];S.ns={...S.ns,nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''}
   setTimeout(()=>{S.nsMsg=null;render()},4000)
   await loadAll()
 }
@@ -1486,7 +1494,7 @@ function pNuevaSolicitud(){
   const recientes=S.presupuestos.filter(r=>r.coordinador_id===S.user.id).slice(0,20)
   return '<div style="display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start">'+
     '<div class="card" style="margin:0">'+
-    '<div class="ct" style="margin-bottom:14px">Nueva solicitud EXTRA</div>'+
+    '<div class="ct" style="margin-bottom:14px">Solicitud Extra</div>'+
     (S.nsMsg?'<div class="'+(S.nsMsg.t==='o'?'ok-msg':'err-msg')+'">'+S.nsMsg.m+'</div>':'')+
     '<div class="fsec">Solicitante</div>'+
     '<div style="padding:8px 10px;background:var(--navyL);border-radius:6px;font-size:12px;color:var(--navy);margin-bottom:12px">'+
@@ -1500,6 +1508,10 @@ function pNuevaSolicitud(){
     '<div style="margin-bottom:12px">'+
     '<label class="fl" style="color:var(--red)">¿Cuándo necesitas el dinero? *</label>'+
     '<input type="date" class="fi" value="'+(ns.fecha_dispersion||'')+'" onchange="S.ns.fecha_dispersion=this.value" style="width:100%;font-size:14px">'+
+    '</div>'+
+    '<div class="fr2" style="margin-bottom:12px">'+
+    '<div><label class="fl">Fecha inicio de viaje</label><input type="date" class="fi" value="'+(ns.fecha_inicio_viaje||'')+'" onchange="S.ns.fecha_inicio_viaje=this.value"></div>'+
+    '<div><label class="fl">Fecha fin de viaje</label><input type="date" class="fi" value="'+(ns.fecha_fin_viaje||'')+'" onchange="S.ns.fecha_fin_viaje=this.value"></div>'+
     '</div>'+
     '<div style="margin-bottom:12px">'+
     '<label class="fl">Ruta</label>'+
@@ -1565,7 +1577,7 @@ function render(){
     return
   }
 
-  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios',ch_resumen:'CH — Resumen',ch_captura:'CH — Captura de gasto',ch_aprobacion:'CH — Aprobación',mis_solicitudes:'Mis Solicitudes',nueva_solicitud:'Nueva Solicitud'}
+  const labels={resumen:'Resumen ejecutivo',captura:'Captura de presupuesto',aprobacion:'Aprobación',comparativo:'Comparativo banco',tecnicos:'Técnicos',usuarios:'Usuarios',ch_resumen:'CH — Resumen',ch_captura:'CH — Captura de gasto',ch_aprobacion:'CH — Aprobación',mis_solicitudes:'Mis Solicitudes',nueva_solicitud:'Solicitud Extra'}
   const pages={resumen:pResumen,captura:pCaptura,aprobacion:pAprobacion,comparativo:pComparativo,tecnicos:pTecnicos,usuarios:pUsuarios,ch_resumen:pResumenCH,ch_captura:pCapturaCH,ch_aprobacion:pAprobacionCH,mis_solicitudes:pMisSolicitudes,nueva_solicitud:pNuevaSolicitud}
   const pageHtml=(pages[S.page]||pResumen)()
 
