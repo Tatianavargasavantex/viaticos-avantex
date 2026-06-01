@@ -274,6 +274,17 @@ async function dispersar(id){
   await loadAll()
 }
 
+async function revertirDispersion(id){
+  if(!confirm('¿Seguro que deseas revertir la dispersión de esta solicitud?'))return
+  const{error}=await sb.from('presupuestos').update({
+    estado_dispersion:'pendiente',
+    fecha_dispersado:null,
+    dispersado_por:null
+  }).eq('id',id)
+  if(error){alert('Error al revertir: '+error.message);return}
+  await loadAll()
+}
+
 async function delPres(id){
   if(!confirm('Eliminar este registro?'))return
   await sb.from('presupuestos').delete().eq('id',id);await loadAll()
@@ -1022,7 +1033,8 @@ function pAprobacion(){
           '<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="setEstado(\''+ r.id +'\',\'RECHAZADO\',\'\')">✕</button>':
           r.estado==='APROBADO'?
             (estaDisp?
-              '<span class="badge" style="background:#F3F4F6;color:var(--g600);border:1px solid var(--g200);font-size:11px">Dispersado ✓'+(fechaDisp?' · '+fechaDisp:'')+'</span>':
+              '<span class="badge" style="background:#F3F4F6;color:var(--g600);border:1px solid var(--g200);font-size:11px">Dispersado ✓'+(fechaDisp?' · '+fechaDisp:'')+'</span>'+
+              ' <button class="btn btn-xs" style="color:var(--red);background:#FEF2F2;border-color:#FECACA;margin-left:4px" onclick="revertirDispersion(\''+ r.id +'\')">Revertir</button>':
               '<button class="btn btn-xs" style="color:var(--green);background:#F0FDF4;border-color:#BBF7D0;font-weight:600" onclick="dispersar(\''+ r.id +'\')">$ Dispersar</button>'
             ):
             '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
