@@ -1,0 +1,31 @@
+name: Generar presupuestos fijos semanales
+
+on:
+  schedule:
+    # Cada lunes a las 13:00 UTC = 7:00 AM hora Ciudad de México (CDT, UTC-6)
+    - cron: '0 13 * * 1'
+  # Permitir ejecución manual desde GitHub Actions
+  workflow_dispatch:
+
+jobs:
+  generar:
+    name: Generar presupuestos fijos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias
+        run: npm install @supabase/supabase-js
+
+      - name: Ejecutar script de generación
+        env:
+          SUPABASE_URL: https://qyzlzfagdqkpczifnphd.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/generar-fijos.mjs
