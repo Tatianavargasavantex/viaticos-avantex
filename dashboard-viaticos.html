@@ -152,6 +152,7 @@ let S={
   chAfe:'PENDIENTE',
   chOpen:false,
   ns:(()=>{const _h=new Date(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:Math.ceil(_h.getDate()/7),mes:_meses[_h.getMonth()],anio:_h.getFullYear(),nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),nsMsg:null,
+  capf:{estado:'',mes:(()=>{const _h=new Date(),_m=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return _m[_h.getMonth()]})(),semana:''},
   msf:{mes:'',estado:''},
   editPres:null,editPresData:{},
   importPreview:null,importProgress:null,
@@ -918,7 +919,15 @@ function pCaptura(){
   const tf=S.tecnicos.filter(t=>(!S.zf||t.zona===S.zf)&&(!S.bf||t.nombre.toLowerCase().includes(S.bf.toLowerCase())))
   const _rol=S.perfil?S.perfil.rol:null
   const _tecCoordSet=(_rol==='coordinador'&&S.tecnicos.length)?new Set(S.tecnicos.map(t=>t.nombre)):null
-  const regs=fil(S.presupuestos).filter(r=>!_tecCoordSet||_tecCoordSet.has(r.tecnico_nombre)).slice(0,100)
+  const regsAll=S.presupuestos
+    .filter(r=>(!_tecCoordSet||_tecCoordSet.has(r.tecnico_nombre)))
+    .filter(r=>
+      (!S.capf.estado||r.estado===S.capf.estado)&&
+      (!S.capf.mes||r.mes===S.capf.mes)&&
+      (!S.capf.semana||String(r.semana)===S.capf.semana)&&
+      (!S.f.tecnico||r.tecnico_nombre.toLowerCase().includes(S.f.tecnico.toLowerCase()))
+    )
+  const regs=regsAll.slice(0,100)
   const total=S.lineas.reduce((a,l)=>a+l.monto,0)
   const _esAdminOCoord=_rol==='admin'||_rol==='coordinador'
   const _esDirecto=_rol==='vendedor'||_rol==='administracion'
@@ -1011,8 +1020,21 @@ function pCaptura(){
     '<button class="btn btn-n" id="btn-guardar" style="width:100%;padding:11px;font-size:14px" onclick="guardarPresupuesto()" disabled>Guardar solicitud</button>'+
     '</div>'+
     '<div class="card" style="margin:0">'+
-    '<div class="ch"><div><div class="ct">Registros capturados</div><div class="cs">'+regs.length+' registros</div></div>'+
-    '<input class="fin" placeholder="Buscar técnico..." value="'+(S.f.tecnico||'')+'" onchange="S.f.tecnico=this.value;render()" style="width:180px">'+
+    '<div class="ch" style="margin-bottom:10px"><div><div class="ct">Registros capturados</div><div class="cs">'+regsAll.length+' registros'+(regsAll.length>100?' · mostrando primeros 100':'')+'</div></div></div>'+
+    '<div class="flt" style="padding-bottom:10px;margin-bottom:0">'+
+    '<select class="fs" onchange="S.capf.estado=this.value;render()"><option value="">Todos los estados</option>'+
+    '<option value="PENDIENTE"'+(S.capf.estado==='PENDIENTE'?' selected':'')+'>Pendiente</option>'+
+    '<option value="APROBADO"'+(S.capf.estado==='APROBADO'?' selected':'')+'>Aprobado</option>'+
+    '<option value="RECHAZADO"'+(S.capf.estado==='RECHAZADO'?' selected':'')+'>Rechazado</option>'+
+    '</select>'+
+    '<select class="fs" onchange="S.capf.mes=this.value;render()"><option value="">Todos los meses</option>'+
+    MESES.map(m=>'<option value="'+m+'"'+(S.capf.mes===m?' selected':'')+'>'+m.charAt(0)+m.slice(1).toLowerCase()+'</option>').join('')+
+    '</select>'+
+    '<select class="fs" onchange="S.capf.semana=this.value;render()"><option value="">Todas las semanas</option>'+
+    [1,2,3,4,5,6,7,8].map(s=>'<option value="'+s+'"'+(S.capf.semana==s?' selected':'')+'>S'+s+'</option>').join('')+
+    '</select>'+
+    '<input class="fin" placeholder="Buscar técnico..." value="'+(S.f.tecnico||'')+'" onchange="S.f.tecnico=this.value;render()" style="width:160px">'+
+    (S.capf.estado||S.capf.mes||S.capf.semana||S.f.tecnico?'<button class="btn btn-sm" onclick="S.capf={estado:\'\',mes:\'\',semana:\'\'};S.f.tecnico=\'\';render()" style="font-size:11px;color:var(--red);border-color:#FECACA">✕ Limpiar</button>':'')+
     '</div>'+
     '<div class="tw"><table><thead><tr><th>Sem</th><th>Mes</th><th>Técnico</th><th>Zona</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th></th></tr></thead><tbody>'+
     (regs.length?regs.map(r=>'<tr>'+
