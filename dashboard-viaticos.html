@@ -155,7 +155,8 @@ let S={
   msf:{mes:'',estado:''},
   editPres:null,editPresData:{},
   importPreview:null,importProgress:null,
-  generandoFijos:false
+  generandoFijos:false,
+  aprobando:null,motivoAprobacion:''
 }
 
 const fmt=n=>'$'+Math.round(n||0).toLocaleString('es-MX')
@@ -255,6 +256,7 @@ async function setEstado(ids,accion,nota){
     const upd={estado:accion}
     const el=document.getElementById('me-'+id)
     if(el&&accion==='APROBADO'){const v=parseFloat(el.value);if(v>0)upd.monto=v}
+    if(accion==='APROBADO'&&nota&&nota.trim())upd.comentario_aprobacion=nota.trim()
     await sb.from('presupuestos').update(upd).eq('id',id)
   }
   const{data:{user}}=await sb.auth.getUser()
@@ -264,6 +266,38 @@ async function setEstado(ids,accion,nota){
     accion:accion,nota:nota||null
   })))
   S.sel=new Set();await loadAll()
+}
+
+function iniciarAprobacion(id){
+  const r=S.presupuestos.find(p=>p.id===id)
+  if(!r)return
+  const el=document.getElementById('me-'+id)
+  const montoAprobado=el?parseFloat(el.value)||r.monto:r.monto
+  S.aprobando={id,tecnico:r.tecnico_nombre,montoOriginal:r.monto,montoAprobado,
+    requiereMotivo:Math.round(montoAprobado)!==Math.round(r.monto)}
+  S.motivoAprobacion=''
+  render()
+}
+
+async function confirmarAprobacion(){
+  const a=S.aprobando
+  if(!a)return
+  if(a.requiereMotivo&&!S.motivoAprobacion.trim()){
+    alert('El motivo del ajuste es obligatorio cuando el monto cambia')
+    return
+  }
+  const upd={estado:'APROBADO',monto:a.montoAprobado}
+  if(S.motivoAprobacion.trim())upd.comentario_aprobacion=S.motivoAprobacion.trim()
+  const{error}=await sb.from('presupuestos').update(upd).eq('id',a.id)
+  if(error){alert('Error: '+error.message);return}
+  const{data:{user}}=await sb.auth.getUser()
+  await sb.from('aprobaciones').insert([{
+    presupuesto_id:a.id,supervisor_id:user.id,
+    supervisor_nombre:S.perfil?S.perfil.nombre:'',
+    accion:'APROBADO',nota:S.motivoAprobacion.trim()||null
+  }])
+  S.aprobando=null;S.motivoAprobacion=''
+  await loadAll()
 }
 
 async function dispersar(id){
@@ -981,7 +1015,7 @@ function pCaptura(){
       '<td><span class="badge bz">'+r.zona+'</span></td>'+
       '<td style="color:var(--g600);font-size:12px">'+r.concepto+'</td>'+
       '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
-      '<td>'+be(r.estado)+'</td>'+
+      '<td>'+be(r.estado)+(r.comentario_aprobacion?'<div style="font-size:10px;color:var(--g600);margin-top:3px">💬 '+r.comentario_aprobacion+'</div>':'')+'</td>'+
       '<td>'+(r.estado==='PENDIENTE'?'<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="delPres(\''+r.id+'\')">✕</button>':'')+'</td>'+
      '</tr>').join(''):'<tr><td colspan="8" class="empty">No hay registros aún</td></tr>')+
     '</tbody></table></div></div></div>'
@@ -1031,9 +1065,24 @@ function pAprobacion(){
     '</div>'+
     (sel.size>0?'<div class="abar">'+
     '<span style="font-size:13px;color:var(--navy);font-weight:600">'+sel.size+' seleccionados · '+fmt(totSel)+'</span>'+
-    '<input class="fin" placeholder="Nota opcional..." id="nota-sel" style="flex:1;min-width:180px">'+
+    '<input class="fin" placeholder="Comentario al coordinador (opcional)..." id="nota-sel" style="flex:1;min-width:180px">'+
     '<button class="btn btn-g btn-sm" onclick="setEstado(Array.from(S.sel),\'APROBADO\',document.getElementById(\'nota-sel\').value)">✓ Aprobar</button>'+
     '<button class="btn btn-r btn-sm" onclick="setEstado(Array.from(S.sel),\'RECHAZADO\',document.getElementById(\'nota-sel\').value)">✕ Rechazar</button>'+
+    '</div>':'')+
+    (S.aprobando?'<div class="abar" style="background:#F0FDF4;border:1.5px solid #BBF7D0;flex-wrap:wrap;gap:10px">'+
+    '<div style="display:flex;flex-direction:column;gap:2px">'+
+    '<span style="font-size:13px;font-weight:600;color:var(--green)">Aprobando: '+S.aprobando.tecnico+'</span>'+
+    (S.aprobando.requiereMotivo?'<span style="font-size:11px;color:var(--amber)">⚠ Monto ajustado: '+fmt(S.aprobando.montoOriginal)+' → '+fmt(S.aprobando.montoAprobado)+'</span>':
+    '<span style="font-size:11px;color:var(--g600)">Monto: '+fmt(S.aprobando.montoAprobado)+'</span>')+
+    '</div>'+
+    '<div style="flex:1;display:flex;align-items:center;gap:8px;min-width:240px">'+
+    '<label style="font-size:12px;white-space:nowrap;color:'+(S.aprobando.requiereMotivo?'var(--red)':'var(--g600)')+'">'+
+    (S.aprobando.requiereMotivo?'Motivo del ajuste *':'Comentario al coordinador')+
+    '</label>'+
+    '<input class="fin" style="flex:1" placeholder="'+(S.aprobando.requiereMotivo?'Requerido...':'Opcional...')+'" value="'+(S.motivoAprobacion||'')+'" oninput="S.motivoAprobacion=this.value">'+
+    '</div>'+
+    '<button class="btn btn-g btn-sm" onclick="confirmarAprobacion()">✓ Confirmar</button>'+
+    '<button class="btn btn-sm" onclick="S.aprobando=null;render()">Cancelar</button>'+
     '</div>':'')+
     '<div class="card" style="padding:0;overflow:hidden">'+
     '<table><thead><tr>'+
@@ -1056,7 +1105,7 @@ function pAprobacion(){
         '<td style="text-align:right">'+(r.estado==='PENDIENTE'?'<input type="number" id="me-'+r.id+'" value="'+r.monto+'" min="0" step="1" style="width:90px;padding:3px 6px;border:1.5px solid #BFDBFE;border-radius:6px;font-size:12px;text-align:right;font-weight:600">':fmt(r.monto))+'</td>'+
         '<td>'+be(r.estado)+'</td>'+
         '<td style="white-space:nowrap">'+(r.estado==='PENDIENTE'?
-          '<button class="btn btn-xs" style="color:var(--green);border-color:#BBF7D0;margin-right:4px" onclick="setEstado(\''+ r.id +'\',\'APROBADO\',\'\')">✓</button>'+
+          '<button class="btn btn-xs" style="color:var(--green);border-color:#BBF7D0;margin-right:4px" onclick="iniciarAprobacion(\''+ r.id +'\')">✓</button>'+
           '<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="setEstado(\''+ r.id +'\',\'RECHAZADO\',\'\')">✕</button>':
           r.estado==='APROBADO'?
             (estaDisp?
@@ -1396,7 +1445,7 @@ function pMisSolicitudes(){
         '<td style="font-size:11px;color:var(--g600)">'+(r.ruta||'<span style="color:var(--g400)">—</span>')+'</td>'+
         '<td>'+r.concepto+'</td>'+
         '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
-        '<td>'+be(r.estado)+'</td>'+
+        '<td>'+be(r.estado)+(r.comentario_aprobacion?'<div style="font-size:10px;color:var(--g600);margin-top:3px">💬 '+r.comentario_aprobacion+'</div>':'')+'</td>'+
         '<td>'+badgeDisp+'</td>'+
         '<td style="white-space:nowrap;text-align:right">'+
         '<button class="btn btn-xs" style="margin-right:4px" onclick="abrirEditPres(\''+r.id+'\')">✎ Editar</button>'+
