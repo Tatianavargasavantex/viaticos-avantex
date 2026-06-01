@@ -131,7 +131,7 @@ const POL={MATRIZ:400,FORANEOS:400,SURESTE:300,BAJIO:300,CDMX:250}
 
 let S={
   user:null,perfil:null,page:'resumen',
-  presupuestos:[],tecnicos:[],usuarios:[],banco:[],
+  presupuestos:[],tecnicos:[],usuarios:[],banco:[],rutas:[],
   loading:false,
   f:{semana:'',mes:'',zona:'',estado:'',tecnico:''},
   sel:new Set(),
@@ -151,7 +151,7 @@ let S={
   chSel:new Set(),
   chAfe:'PENDIENTE',
   chOpen:false,
-  ns:(()=>{const _h=new Date(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:Math.ceil(_h.getDate()/7),mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',nota:'',fecha_dispersion:''};})(),nsMsg:null,
+  ns:(()=>{const _h=new Date(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:Math.ceil(_h.getDate()/7),mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',nota:'',fecha_dispersion:'',ruta:''};})(),nsMsg:null,
   msf:{mes:'',estado:''},
   editPres:null,editPresData:{},
   importPreview:null,importProgress:null,
@@ -199,12 +199,14 @@ async function loadAll(){
   const esCoord=S.perfil&&S.perfil.rol==='coordinador'
   let tecQuery=sb.from('tecnicos').select('*').eq('activo',true).order('nombre')
   if(esCoord&&S.perfil.nombre)tecQuery=tecQuery.ilike('coordinador',S.perfil.nombre)
-  const[t,u]=await Promise.all([
+  const[t,u,rv]=await Promise.all([
     tecQuery,
     sb.from('perfiles').select('*').order('nombre'),
+    sb.from('rutas').select('ruta,region').eq('activo',true).order('region').order('ruta'),
   ])
   S.tecnicos=t.data||[]
   S.usuarios=u.data||[]
+  S.rutas=rv.data||[]
   const[presupuestos,banco]=await Promise.all([
     fetchAll(()=>sb.from('presupuestos').select('*').order('creado_en',{ascending:false})),
     fetchAll(()=>sb.from('gastos_banco').select('*').order('creado_en',{ascending:false})),
@@ -398,7 +400,8 @@ async function guardarNuevaSolicitud(){
     zona:tecZona,ciudad:tecCiudad,udn:tecUdn,coordinador:tecCoord,
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
     comentarios:ns.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE',
-    fecha_dispersion:ns.fecha_dispersion,estado_dispersion:'pendiente'
+    fecha_dispersion:ns.fecha_dispersion,estado_dispersion:'pendiente',
+    ruta:ns.ruta||null
   }))
   const{error}=await sb.from('presupuestos').insert(rows)
   if(error){S.nsMsg={t:'e',m:error.message};render();return}
@@ -1012,7 +1015,7 @@ function pAprobacion(){
     '<div class="card" style="padding:0;overflow:hidden">'+
     '<table><thead><tr>'+
     '<th style="width:36px"><input type="checkbox" onchange="var ids=S.presupuestos.filter(r=>r.estado===\'PENDIENTE\').map(r=>r.id);S.sel=this.checked?new Set(ids):new Set();render()"></th>'+
-    '<th>Solicitante</th><th>Zona</th><th>Concepto</th><th>Comentario</th><th>Fecha disp.</th><th>Sem/Mes</th><th style="text-align:right">Monto solicitado</th><th style="text-align:right">Monto a aprobar</th><th>Estado</th><th>Acciones</th>'+
+    '<th>Solicitante</th><th>Zona</th><th>Ruta</th><th>Concepto</th><th>Comentario</th><th>Fecha disp.</th><th>Sem/Mes</th><th style="text-align:right">Monto solicitado</th><th style="text-align:right">Monto a aprobar</th><th>Estado</th><th>Acciones</th>'+
     '</tr></thead><tbody>'+
     (data.length?data.map(r=>{
       const estaDisp=r.estado_dispersion==='dispersado'
@@ -1021,6 +1024,7 @@ function pAprobacion(){
         '<td>'+(r.estado==='PENDIENTE'?'<input type="checkbox"'+(sel.has(r.id)?' checked':'')+' onchange="S.sel[this.checked?\'add\':\'delete\'](\''+ r.id +'\');render()">':'')+'</td>'+
         '<td style="font-weight:600">'+r.tecnico_nombre+'</td>'+
         '<td><span class="badge bz">'+r.zona+'</span></td>'+
+        '<td style="font-size:11px;color:var(--g600);white-space:nowrap">'+(r.ruta||'<span style="color:var(--g400)">—</span>')+'</td>'+
         '<td style="font-size:12px;color:var(--g600)">'+r.concepto+'</td>'+
         '<td><div class="comentario-cell" title="'+(r.comentarios||'')+'">'+( r.comentarios||'<span style="color:var(--g400);font-style:italic;font-size:11px">—</span>')+'</div></td>'+
         '<td style="font-size:12px;white-space:nowrap">'+(r.fecha_dispersion?'<span style="color:var(--amber);font-weight:600">'+r.fecha_dispersion+'</span>':'<span style="color:var(--g400)">—</span>')+'</td>'+
@@ -1039,7 +1043,7 @@ function pAprobacion(){
             ):
             '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
         '</td></tr>'
-    }).join(''):'<tr><td colspan="11" class="empty">Sin registros</td></tr>')
+    }).join(''):'<tr><td colspan="12" class="empty">Sin registros</td></tr>')
     '</tbody></table></div>'
 }
 
@@ -1352,7 +1356,7 @@ function pMisSolicitudes(){
     '<div style="display:flex;gap:8px"><button class="btn btn-n" onclick="guardarEditPres()">Guardar cambios</button><button class="btn" onclick="S.editPres=null;S.editPresData={};render()">Cancelar</button></div>'+
     '</div>':'')+
     '<div class="card" style="padding:0;overflow:hidden">'+
-    '<table><thead><tr><th>Sem</th><th>Mes</th><th>Técnico</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th>Dispersión</th><th></th></tr></thead><tbody>'+
+    '<table><thead><tr><th>Sem</th><th>Mes</th><th>Técnico</th><th>Ruta</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th>Dispersión</th><th></th></tr></thead><tbody>'+
     (mis.length?mis.map(r=>{
       const estaDisp=r.estado_dispersion==='dispersado'
       const fechaDisp=r.fecha_dispersado?new Date(r.fecha_dispersado).toLocaleDateString('es-MX'):''
@@ -1365,6 +1369,7 @@ function pMisSolicitudes(){
         '<td><span class="badge bs">S'+r.semana+'</span></td>'+
         '<td style="color:var(--g600)">'+r.mes+'</td>'+
         '<td style="font-size:12px">'+( r.tecnico_nombre||'—')+'</td>'+
+        '<td style="font-size:11px;color:var(--g600)">'+(r.ruta||'<span style="color:var(--g400)">—</span>')+'</td>'+
         '<td>'+r.concepto+'</td>'+
         '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
         '<td>'+be(r.estado)+'</td>'+
@@ -1374,7 +1379,7 @@ function pMisSolicitudes(){
         '<button class="btn btn-xs btn-r" onclick="delPres(\''+r.id+'\')">✕ Eliminar</button>'+
         '</td>'+
         '</tr>'
-    }).join(''):'<tr><td colspan="8" class="empty">Sin solicitudes registradas</td></tr>')
+    }).join(''):'<tr><td colspan="9" class="empty">Sin solicitudes registradas</td></tr>')
     '</tbody></table></div>'
 }
 
@@ -1399,6 +1404,13 @@ function pNuevaSolicitud(){
     '<div style="margin-bottom:12px">'+
     '<label class="fl" style="color:var(--red)">¿Cuándo necesitas el dinero? *</label>'+
     '<input type="date" class="fi" value="'+(ns.fecha_dispersion||'')+'" onchange="S.ns.fecha_dispersion=this.value" style="width:100%;font-size:14px">'+
+    '</div>'+
+    '<div style="margin-bottom:12px">'+
+    '<label class="fl">Ruta</label>'+
+    '<input class="fi" list="rutas-list" placeholder="Busca tu ruta..." value="'+(ns.ruta||'')+'" oninput="S.ns.ruta=this.value" style="width:100%">'+
+    '<datalist id="rutas-list">'+
+    S.rutas.map(r=>'<option value="'+r.ruta+'">'+r.ruta+' — '+r.region+'</option>').join('')+
+    '</datalist>'+
     '</div>'+
     '<div class="fsec">Conceptos del viaje</div>'+
     '<div id="lineas-wrap" style="margin-bottom:10px"><p style="font-size:12px;color:var(--g400);text-align:center;padding:8px">Sin conceptos agregados</p></div>'+
