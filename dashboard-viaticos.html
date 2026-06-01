@@ -139,7 +139,7 @@ let S={
   f2:{zona:'',tecnico:''},
   lineas:[],capMsg:null,
   cap:(()=>{const _h=new Date(),_d=_h.getDate(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),
-  zf:'',bf:'',
+  zf:'',bf:'',nszf:'',nsbf:'',
   nu:{email:'',nombre:'',rol:'coordinador',zona:''},nuMsg:null,showNu:false,
   tb:'',
   showNt2:false,nt2:{nombre:'',zona:'',ciudad:'',udn:'',coordinador:'',region:'',subsede:'',estado:''},nt2Msg:null,
@@ -151,7 +151,7 @@ let S={
   chSel:new Set(),
   chAfe:'PENDIENTE',
   chOpen:false,
-  ns:(()=>{const _h=new Date(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:Math.ceil(_h.getDate()/7),mes:_meses[_h.getMonth()],anio:_h.getFullYear(),nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),nsMsg:null,
+  ns:(()=>{const _h=new Date(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:Math.ceil(_h.getDate()/7),mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),nsMsg:null,
   capf:{estado:'',mes:(()=>{const _h=new Date(),_m=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return _m[_h.getMonth()]})(),semana:''},
   msf:{mes:'',estado:''},
   editPres:null,editPresData:{},
@@ -364,7 +364,8 @@ function renderLineas(){
   const btn=document.getElementById('btn-guardar')
   if(btn){
     if(S.page==='nueva_solicitud'){
-      btn.disabled=S.lineas.length===0
+      const _esDir=S.perfil&&(S.perfil.rol==='vendedor'||S.perfil.rol==='administracion')
+      btn.disabled=S.lineas.length===0||(!_esDir&&!S.ns.tid)
     } else {
       const _esDirecto=S.perfil&&(S.perfil.rol==='vendedor'||S.perfil.rol==='administracion')
       const ts=S.tecnicos.find(t=>t.id===S.cap.tid)
@@ -1495,10 +1496,20 @@ async function guardarNuevaSolicitud(){
   const p=S.perfil
   const ns=S.ns
   if(!ns.fecha_dispersion){S.nsMsg={t:'e',m:'Indica cuándo necesitas el dinero (fecha de dispersión)'};render();return}
+  const esDirecto=p&&(p.rol==='vendedor'||p.rol==='administracion')
+  let tecId,tecNombre,tecZona,tecCiudad='',tecUdn='',tecCoord=''
+  if(esDirecto){
+    tecId=S.user.id;tecNombre=p.nombre;tecZona=p.zona||'MATRIZ'
+  } else {
+    if(!ns.tid){S.nsMsg={t:'e',m:'Selecciona un técnico'};render();return}
+    const tec=S.tecnicos.find(t=>t.id===ns.tid)
+    if(!tec){S.nsMsg={t:'e',m:'Técnico no encontrado'};render();return}
+    tecId=tec.id;tecNombre=tec.nombre;tecZona=tec.zona;tecCiudad=tec.ciudad||'';tecUdn=tec.udn||'';tecCoord=tec.coordinador||''
+  }
   const rows=S.lineas.map(l=>({
     semana:parseInt(ns.semana),mes:ns.mes,anio:parseInt(ns.anio||new Date().getFullYear()),
-    tipo:'EXTRA',tecnico_id:S.user.id,tecnico_nombre:p.nombre,
-    zona:p.zona||'MATRIZ',ciudad:'',udn:'',coordinador:'',
+    tipo:'EXTRA',tecnico_id:tecId,tecnico_nombre:tecNombre,
+    zona:tecZona,ciudad:tecCiudad,udn:tecUdn,coordinador:tecCoord,
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
     comentarios:ns.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE',
     fecha_dispersion:ns.fecha_dispersion,estado_dispersion:'pendiente',
@@ -1509,7 +1520,7 @@ async function guardarNuevaSolicitud(){
   if(error){S.nsMsg={t:'e',m:error.message};render();return}
   const total=S.lineas.reduce((a,l)=>a+l.monto,0)
   S.nsMsg={t:'o',m:rows.length+' concepto(s) guardados · Total: '+fmt(total)}
-  S.lineas=[];S.ns={...S.ns,nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''}
+  S.lineas=[];S.ns={...S.ns,tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''}
   setTimeout(()=>{S.nsMsg=null;render()},4000)
   await loadAll()
 }
@@ -1517,6 +1528,10 @@ async function guardarNuevaSolicitud(){
 function pNuevaSolicitud(){
   const ns=S.ns
   const p=S.perfil
+  const _nrol=p?p.rol:null
+  const _nesDirecto=_nrol==='vendedor'||_nrol==='administracion'
+  const nstf=S.tecnicos.filter(t=>(!S.nszf||t.zona===S.nszf)&&(!S.nsbf||t.nombre.toLowerCase().includes(S.nsbf.toLowerCase())))
+  const nsts=S.tecnicos.find(t=>t.id===ns.tid)
   const recientes=S.presupuestos.filter(r=>r.coordinador_id===S.user.id).slice(0,20)
   return '<div style="display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start">'+
     '<div class="card" style="margin:0">'+
@@ -1526,6 +1541,18 @@ function pNuevaSolicitud(){
     '<div style="padding:8px 10px;background:var(--navyL);border-radius:6px;font-size:12px;color:var(--navy);margin-bottom:12px">'+
     '<strong>'+(p?p.nombre:'')+'</strong>'+(p&&p.zona?' · '+p.zona:'')+
     '</div>'+
+    (!_nesDirecto?
+      '<div class="fsec">Técnico</div>'+
+      '<div class="fr2" style="margin-bottom:8px">'+
+      '<div><label class="fl">Zona</label><select class="fi" onchange="S.nszf=this.value;render()"><option value="">Todas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.nszf===z?' selected':'')+'>'+z+'</option>').join('')+'</select></div>'+
+      '<div><label class="fl">Buscar</label><input class="fi" placeholder="Nombre..." value="'+S.nsbf+'" onchange="S.nsbf=this.value;render()"></div>'+
+      '</div>'+
+      '<select class="fi" size="5" style="height:auto;margin-bottom:8px" onchange="S.ns.tid=this.value;render()">'+
+      '<option value="">— Selecciona un técnico —</option>'+
+      nstf.map(t=>'<option value="'+t.id+'"'+(ns.tid===t.id?' selected':'')+'>'+t.nombre+' · '+(t.ciudad||'')+'</option>').join('')+
+      '</select>'+
+      (nsts?'<div style="padding:6px 10px;background:var(--navyL);border-radius:6px;font-size:11px;color:var(--navy);margin-bottom:8px"><strong>'+nsts.nombre+'</strong> · '+nsts.zona+' · '+(nsts.udn||'')+' · '+(nsts.ciudad||'')+(nsts.coordinador?' · Coord: <strong>'+nsts.coordinador+'</strong>':'')+'</div>':'')
+    :'')+
     '<div class="fsec">Periodo</div>'+
     '<div class="fr2">'+
     '<div><label class="fl">Semana</label><input class="fi" type="number" min="1" max="53" value="'+ns.semana+'" onchange="S.ns.semana=this.value"></div>'+
