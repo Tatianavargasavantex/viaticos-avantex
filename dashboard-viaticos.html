@@ -135,7 +135,7 @@ let S={
   loading:false,
   f:{semana:'',mes:'',zona:'',estado:'',tecnico:''},
   sel:new Set(),
-  afe:'PENDIENTE',afz:'',afb:'',afn:'',afd:new Date().toISOString().split('T')[0],afed:'',
+  afe:'PENDIENTE',afz:'',afb:'',afn:'',afd_desde:(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1).toISOString().split('T')[0]})(),afd_hasta:(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().split('T')[0]})(),afed:'',
   f2:{zona:'',tecnico:''},
   lineas:[],capMsg:null,
   cap:(()=>{const _h=new Date(),_d=_h.getDate(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',tid:'',nota:'',fecha_dispersion:'',ruta:''};})(),
@@ -987,7 +987,12 @@ function pAprobacion(){
   if(S.afe)data=data.filter(r=>r.estado===S.afe)
   if(S.afz)data=data.filter(r=>r.zona===S.afz)
   if(S.afb)data=data.filter(r=>r.tecnico_nombre.toLowerCase().includes(S.afb.toLowerCase()))
-  if(S.afd)data=data.filter(r=>r.fecha_dispersion===S.afd)
+  if(S.afe!=='PENDIENTE'&&(S.afd_desde||S.afd_hasta))data=data.filter(r=>{
+    if(!r.fecha_dispersion)return true
+    if(S.afd_desde&&r.fecha_dispersion<S.afd_desde)return false
+    if(S.afd_hasta&&r.fecha_dispersion>S.afd_hasta)return false
+    return true
+  })
   if(S.afed)data=data.filter(r=>(r.estado_dispersion||'pendiente')===S.afed)
   data=[...data].sort((a,b)=>{
     if(!a.fecha_dispersion&&!b.fecha_dispersion)return 0
@@ -1015,7 +1020,8 @@ function pAprobacion(){
     '<select class="fs" onchange="S.afe=this.value;render()"><option value="">Todos</option><option value="PENDIENTE"'+(S.afe==='PENDIENTE'?' selected':'')+'>Pendientes</option><option value="APROBADO"'+(S.afe==='APROBADO'?' selected':'')+'>Aprobados</option><option value="RECHAZADO"'+(S.afe==='RECHAZADO'?' selected':'')+'>Rechazados</option></select>'+
     '<select class="fs" onchange="S.afz=this.value;render()"><option value="">Todas las zonas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.afz===z?' selected':'')+'>'+z+'</option>').join('')+'</select>'+
     '<input class="fin" placeholder="Buscar técnico..." value="'+(S.afb||'')+'" onchange="S.afb=this.value;render()">'+
-    '<input type="date" class="fin" title="Filtrar por fecha de dispersión" value="'+(S.afd||'')+'" onchange="S.afd=this.value;render()" style="width:160px">'+
+    '<input type="date" class="fin" title="Desde" value="'+(S.afd_desde||'')+'" onchange="S.afd_desde=this.value;render()" style="width:150px">'+
+    '<input type="date" class="fin" title="Hasta" value="'+(S.afd_hasta||'')+'" onchange="S.afd_hasta=this.value;render()" style="width:150px">'+
     '<select class="fs" onchange="S.afed=this.value;render()"><option value="">Todas las dispersiones</option><option value="pendiente"'+(S.afed==='pendiente'?' selected':'')+'>Pendiente dispersión</option><option value="dispersado"'+(S.afed==='dispersado'?' selected':'')+'>Dispersado</option></select>'+
     '</div>'+
     (sel.size>0?'<div class="abar">'+
