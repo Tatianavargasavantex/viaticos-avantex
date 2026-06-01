@@ -374,12 +374,17 @@ async function guardarNuevaSolicitud(){
   const p=S.perfil
   const ns=S.ns
   if(!ns.fecha_dispersion){S.nsMsg={t:'e',m:'Indica cuándo necesitas el dinero (fecha de dispersión)'};render();return}
-  const tec=S.tecnicos.find(t=>t.nombre===p.nombre)
-  if(!tec){S.nsMsg={t:'e',m:'No tienes un técnico asociado en el sistema. Contacta a tu coordinador o administrador.'};render();return}
+  const esDirecto=p&&(p.rol==='vendedor'||p.rol==='administracion')
+  let tecId=null,tecNombre=p.nombre,tecZona=p.zona||'MATRIZ',tecCiudad='',tecUdn='',tecCoord=''
+  if(!esDirecto){
+    const tec=S.tecnicos.find(t=>t.nombre===p.nombre)
+    if(!tec){S.nsMsg={t:'e',m:'No tienes un técnico asociado en el sistema. Contacta a tu coordinador o administrador.'};render();return}
+    tecId=tec.id;tecNombre=tec.nombre;tecZona=tec.zona;tecCiudad=tec.ciudad||'';tecUdn=tec.udn||'';tecCoord=tec.coordinador||''
+  }
   const rows=S.lineas.map(l=>({
     semana:parseInt(ns.semana),mes:ns.mes,anio:parseInt(ns.anio),
-    tipo:ns.tipo,tecnico_id:tec.id,tecnico_nombre:tec.nombre,
-    zona:tec.zona,ciudad:tec.ciudad||'',udn:tec.udn||'',coordinador:tec.coordinador||'',
+    tipo:ns.tipo,tecnico_id:tecId,tecnico_nombre:tecNombre,
+    zona:tecZona,ciudad:tecCiudad,udn:tecUdn,coordinador:tecCoord,
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
     comentarios:ns.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE',
     fecha_dispersion:ns.fecha_dispersion,estado_dispersion:'pendiente'
@@ -1368,7 +1373,7 @@ function pNuevaSolicitud(){
   return '<div style="display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start">'+
     '<div class="card" style="margin:0">'+
     '<div class="ct" style="margin-bottom:14px">Nueva solicitud</div>'+
-    (S.nsMsg?'<div class="'+(S.nsMsg.t==='o'?'ok-msg':'err-msg')+'">'+S.nsMsg.m+'</div>':'')+
+    (S.nsMsg&&!(p&&(p.rol==='vendedor'||p.rol==='administracion')&&S.nsMsg.m.includes('técnico'))?'<div class="'+(S.nsMsg.t==='o'?'ok-msg':'err-msg')+'">'+S.nsMsg.m+'</div>':'')+
     '<div class="fsec">Solicitante</div>'+
     '<div style="padding:8px 10px;background:var(--navyL);border-radius:6px;font-size:12px;color:var(--navy);margin-bottom:12px">'+
     '<strong>'+(p?p.nombre:'')+'</strong>'+(p&&p.zona?' · '+p.zona:'')+
