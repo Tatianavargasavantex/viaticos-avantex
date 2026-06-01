@@ -390,7 +390,7 @@ async function guardarPresupuesto(){
   }
   const rows=S.lineas.map(l=>({
     semana:parseInt(c.semana),mes:c.mes,anio:parseInt(c.anio),
-    tipo:c.tipo,tecnico_id:tecId,tecnico_nombre:tecNombre,
+    tipo:esDirecto?'EXTRA':c.tipo,tecnico_id:tecId,tecnico_nombre:tecNombre,
     zona:tecZona,ciudad:tecCiudad,udn:tecUdn,coordinador:tecCoord,
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
     comentarios:c.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE',
@@ -762,7 +762,7 @@ function sidebar(){
     {id:'ch_captura',l:'CH — Captura',r:['admin']},
     {id:'ch_aprobacion',l:'CH — Aprobación',r:['admin','supervisor'],b:(S.chGastos||[]).filter(r=>r.estado==='PENDIENTE').length},
     {id:'mis_solicitudes',l:'Mis Solicitudes',r:['vendedor','administracion','coordinador']},
-    {id:'nueva_solicitud',l:'Solicitud Extra',r:['vendedor','administracion']},
+    {id:'nueva_solicitud',l:'Solicitud Extra',r:['admin','supervisor','coordinador','vendedor','administracion']},
   ].filter(n=>n.r.includes(rol))
   const esBasico=rol==='vendedor'||rol==='administracion'||rol==='coordinador'
   return '<aside class="sidebar">'+
@@ -943,7 +943,9 @@ function pCaptura(){
     '<div class="fr">'+
     '<div><label class="fl">Semana</label><input class="fi" type="number" min="1" max="53" value="'+c.semana+'" onchange="S.cap.semana=this.value"></div>'+
     '<div><label class="fl">Mes</label><select class="fi" onchange="S.cap.mes=this.value">'+MESES.map(m=>'<option value="'+m+'"'+(c.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
-    '<div><label class="fl">Tipo</label><select class="fi" onchange="S.cap.tipo=this.value"><option value="PRESUPUESTADO">PRESUPUESTADO</option></select></div>'+
+    (_esDirecto?
+    '<div><label class="fl">Tipo</label><div style="padding:8px 10px;background:var(--navyL);border-radius:6px;font-size:12px;color:var(--navy)">EXTRA</div></div>':
+    '<div><label class="fl">Tipo</label><select class="fi" onchange="S.cap.tipo=this.value"><option value="PRESUPUESTADO"'+(c.tipo==='PRESUPUESTADO'?' selected':'')+'>PRESUPUESTADO</option><option value="EXTRA"'+(c.tipo==='EXTRA'?' selected':'')+'>EXTRA</option></select></div>')+
     '</div>'+
     '<div style="margin-bottom:12px">'+
     '<label class="fl" style="color:var(--red)">¿Cuándo necesitas el dinero? *</label>'+
