@@ -135,7 +135,7 @@ let S={
   loading:false,
   f:{semana:'',mes:'',zona:'',estado:'',tecnico:''},
   sel:new Set(),
-  afe:'PENDIENTE',afz:'',afb:'',afn:'',
+  afe:'PENDIENTE',afz:'',afb:'',afn:'',afd:'',afed:'',
   f2:{zona:'',tecnico:''},
   lineas:[],capMsg:null,
   cap:(()=>{const _h=new Date(),_d=_h.getDate(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',tid:'',nota:''};})(),
@@ -151,7 +151,7 @@ let S={
   chSel:new Set(),
   chAfe:'PENDIENTE',
   chOpen:false,
-  ns:{semana:1,mes:'ENERO',anio:2026,tipo:'PRESUPUESTADO',nota:''},nsMsg:null,
+  ns:{semana:1,mes:'ENERO',anio:2026,tipo:'PRESUPUESTADO',nota:'',fecha_dispersion:''},nsMsg:null,
   msf:{mes:'',estado:''},
   editPres:null,editPresData:{},
   importPreview:null,importProgress:null,
@@ -264,6 +264,16 @@ async function setEstado(ids,accion,nota){
   S.sel=new Set();await loadAll()
 }
 
+async function dispersar(id){
+  const{error}=await sb.from('presupuestos').update({
+    estado_dispersion:'dispersado',
+    fecha_dispersado:new Date().toISOString(),
+    dispersado_por:S.perfil?S.perfil.nombre:''
+  }).eq('id',id)
+  if(error){alert('Error al dispersar: '+error.message);return}
+  await loadAll()
+}
+
 async function delPres(id){
   if(!confirm('Eliminar este registro?'))return
   await sb.from('presupuestos').delete().eq('id',id);await loadAll()
@@ -363,6 +373,7 @@ async function guardarNuevaSolicitud(){
   if(S.lineas.length===0)return
   const p=S.perfil
   const ns=S.ns
+  if(!ns.fecha_dispersion){S.nsMsg={t:'e',m:'Indica cuándo necesitas el dinero (fecha de dispersión)'};render();return}
   const tec=S.tecnicos.find(t=>t.nombre===p.nombre)
   if(!tec){S.nsMsg={t:'e',m:'No tienes un técnico asociado en el sistema. Contacta a tu coordinador o administrador.'};render();return}
   const rows=S.lineas.map(l=>({
@@ -370,7 +381,8 @@ async function guardarNuevaSolicitud(){
     tipo:ns.tipo,tecnico_id:tec.id,tecnico_nombre:tec.nombre,
     zona:tec.zona,ciudad:tec.ciudad||'',udn:tec.udn||'',coordinador:tec.coordinador||'',
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
-    comentarios:ns.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE'
+    comentarios:ns.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE',
+    fecha_dispersion:ns.fecha_dispersion,estado_dispersion:'pendiente'
   }))
   const{error}=await sb.from('presupuestos').insert(rows)
   if(error){S.nsMsg={t:'e',m:error.message};render();return}
@@ -940,29 +952,40 @@ function pCaptura(){
     '</tbody></table></div></div></div>'
 }
 
-// FIX 3: pAprobacion muestra columna de comentarios
 function pAprobacion(){
   let data=S.presupuestos
   if(S.afe)data=data.filter(r=>r.estado===S.afe)
   if(S.afz)data=data.filter(r=>r.zona===S.afz)
   if(S.afb)data=data.filter(r=>r.tecnico_nombre.toLowerCase().includes(S.afb.toLowerCase()))
+  if(S.afd)data=data.filter(r=>r.fecha_dispersion===S.afd)
+  if(S.afed)data=data.filter(r=>(r.estado_dispersion||'pendiente')===S.afed)
+  data=[...data].sort((a,b)=>{
+    if(!a.fecha_dispersion&&!b.fecha_dispersion)return 0
+    if(!a.fecha_dispersion)return 1
+    if(!b.fecha_dispersion)return -1
+    return a.fecha_dispersion<b.fecha_dispersion?-1:a.fecha_dispersion>b.fecha_dispersion?1:0
+  })
   const pend=S.presupuestos.filter(r=>r.estado==='PENDIENTE').length
   const apro=S.presupuestos.filter(r=>r.estado==='APROBADO').length
   const rech=S.presupuestos.filter(r=>r.estado==='RECHAZADO').length
+  const porDispersar=S.presupuestos.filter(r=>r.estado==='APROBADO'&&(r.estado_dispersion||'pendiente')==='pendiente').length
   const sel=S.sel
   const totSel=Array.from(sel).reduce((a,id)=>{const r=S.presupuestos.find(r=>r.id===id);return a+(r?r.monto:0)},0)
 
   return '<div class="pg-t">Aprobación de presupuestos</div>'+
     '<div class="pg-s">Autoriza o rechaza solicitudes pendientes de aprobación</div>'+
-    '<div class="g3">'+
+    '<div class="kpig">'+
     '<div class="kpi amb"><div class="kl">Pendientes</div><div class="kv" style="color:var(--amber)">'+pend+'</div><div class="ks">requieren acción</div></div>'+
     '<div class="kpi grn"><div class="kl">Aprobados</div><div class="kv" style="color:var(--green)">'+apro+'</div></div>'+
     '<div class="kpi red"><div class="kl">Rechazados</div><div class="kv" style="color:var(--red)">'+rech+'</div></div>'+
+    '<div class="kpi '+(porDispersar>0?'amb':'grn')+'"><div class="kl">Por dispersar</div><div class="kv" style="color:'+(porDispersar>0?'var(--amber)':'var(--green)')+'">'+porDispersar+'</div><div class="ks">aprobados sin dispersar</div></div>'+
     '</div>'+
     '<div class="flt">'+
     '<select class="fs" onchange="S.afe=this.value;render()"><option value="">Todos</option><option value="PENDIENTE"'+(S.afe==='PENDIENTE'?' selected':'')+'>Pendientes</option><option value="APROBADO"'+(S.afe==='APROBADO'?' selected':'')+'>Aprobados</option><option value="RECHAZADO"'+(S.afe==='RECHAZADO'?' selected':'')+'>Rechazados</option></select>'+
     '<select class="fs" onchange="S.afz=this.value;render()"><option value="">Todas las zonas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.afz===z?' selected':'')+'>'+z+'</option>').join('')+'</select>'+
     '<input class="fin" placeholder="Buscar técnico..." value="'+(S.afb||'')+'" onchange="S.afb=this.value;render()">'+
+    '<input type="date" class="fin" title="Filtrar por fecha de dispersión" value="'+(S.afd||'')+'" onchange="S.afd=this.value;render()" style="width:160px">'+
+    '<select class="fs" onchange="S.afed=this.value;render()"><option value="">Todas las dispersiones</option><option value="pendiente"'+(S.afed==='pendiente'?' selected':'')+'>Pendiente dispersión</option><option value="dispersado"'+(S.afed==='dispersado'?' selected':'')+'>Dispersado</option></select>'+
     '</div>'+
     (sel.size>0?'<div class="abar">'+
     '<span style="font-size:13px;color:var(--navy);font-weight:600">'+sel.size+' seleccionados · '+fmt(totSel)+'</span>'+
@@ -973,24 +996,33 @@ function pAprobacion(){
     '<div class="card" style="padding:0;overflow:hidden">'+
     '<table><thead><tr>'+
     '<th style="width:36px"><input type="checkbox" onchange="var ids=S.presupuestos.filter(r=>r.estado===\'PENDIENTE\').map(r=>r.id);S.sel=this.checked?new Set(ids):new Set();render()"></th>'+
-    '<th>Solicitante</th><th>Zona</th><th>Concepto</th><th>Comentario</th><th>Sem/Mes</th><th style="text-align:right">Monto solicitado</th><th style="text-align:right">Monto a aprobar</th><th>Estado</th><th>Acciones</th>'+
+    '<th>Solicitante</th><th>Zona</th><th>Concepto</th><th>Comentario</th><th>Fecha disp.</th><th>Sem/Mes</th><th style="text-align:right">Monto solicitado</th><th style="text-align:right">Monto a aprobar</th><th>Estado</th><th>Acciones</th>'+
     '</tr></thead><tbody>'+
-    (data.length?data.map(r=>'<tr>'+
-      '<td>'+(r.estado==='PENDIENTE'?'<input type="checkbox"'+(sel.has(r.id)?' checked':'')+' onchange="S.sel[this.checked?\'add\':\'delete\'](\''+ r.id +'\');render()">':'')+'</td>'+
-      '<td style="font-weight:600">'+r.tecnico_nombre+'</td>'+
-      '<td><span class="badge bz">'+r.zona+'</span></td>'+
-      '<td style="font-size:12px;color:var(--g600)">'+r.concepto+'</td>'+
-      '<td><div class="comentario-cell" title="'+(r.comentarios||'')+'">'+( r.comentarios||'<span style="color:var(--g400);font-style:italic;font-size:11px">—</span>')+'</div></td>'+
-      '<td><span class="badge bs">S'+r.semana+'</span> <span style="color:var(--g600);font-size:12px">'+r.mes+'</span></td>'+
-      '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
-      '<td style="text-align:right">'+(r.estado==='PENDIENTE'?'<input type="number" id="me-'+r.id+'" value="'+r.monto+'" min="0" step="1" style="width:90px;padding:3px 6px;border:1.5px solid #BFDBFE;border-radius:6px;font-size:12px;text-align:right;font-weight:600">':fmt(r.monto))+'</td>'+
-      '<td>'+be(r.estado)+'</td>'+
-      '<td>'+(r.estado==='PENDIENTE'?
-        '<button class="btn btn-xs" style="color:var(--green);border-color:#BBF7D0;margin-right:4px" onclick="setEstado(\''+ r.id +'\',\'APROBADO\',\'\')">✓</button>'+
-      '<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="setEstado(\''+ r.id +'\',\'RECHAZADO\',\'\')">✕</button>':
-        '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
-      '</td></tr>'
-    ).join(''):'<tr><td colspan="10" class="empty">Sin registros</td></tr>')
+    (data.length?data.map(r=>{
+      const estaDisp=r.estado_dispersion==='dispersado'
+      const fechaDisp=r.fecha_dispersado?new Date(r.fecha_dispersado).toLocaleDateString('es-MX'):''
+      return '<tr>'+
+        '<td>'+(r.estado==='PENDIENTE'?'<input type="checkbox"'+(sel.has(r.id)?' checked':'')+' onchange="S.sel[this.checked?\'add\':\'delete\'](\''+ r.id +'\');render()">':'')+'</td>'+
+        '<td style="font-weight:600">'+r.tecnico_nombre+'</td>'+
+        '<td><span class="badge bz">'+r.zona+'</span></td>'+
+        '<td style="font-size:12px;color:var(--g600)">'+r.concepto+'</td>'+
+        '<td><div class="comentario-cell" title="'+(r.comentarios||'')+'">'+( r.comentarios||'<span style="color:var(--g400);font-style:italic;font-size:11px">—</span>')+'</div></td>'+
+        '<td style="font-size:12px;white-space:nowrap">'+(r.fecha_dispersion?'<span style="color:var(--amber);font-weight:600">'+r.fecha_dispersion+'</span>':'<span style="color:var(--g400)">—</span>')+'</td>'+
+        '<td><span class="badge bs">S'+r.semana+'</span> <span style="color:var(--g600);font-size:12px">'+r.mes+'</span></td>'+
+        '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
+        '<td style="text-align:right">'+(r.estado==='PENDIENTE'?'<input type="number" id="me-'+r.id+'" value="'+r.monto+'" min="0" step="1" style="width:90px;padding:3px 6px;border:1.5px solid #BFDBFE;border-radius:6px;font-size:12px;text-align:right;font-weight:600">':fmt(r.monto))+'</td>'+
+        '<td>'+be(r.estado)+'</td>'+
+        '<td style="white-space:nowrap">'+(r.estado==='PENDIENTE'?
+          '<button class="btn btn-xs" style="color:var(--green);border-color:#BBF7D0;margin-right:4px" onclick="setEstado(\''+ r.id +'\',\'APROBADO\',\'\')">✓</button>'+
+          '<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="setEstado(\''+ r.id +'\',\'RECHAZADO\',\'\')">✕</button>':
+          r.estado==='APROBADO'?
+            (estaDisp?
+              '<span class="badge" style="background:#F3F4F6;color:var(--g600);border:1px solid var(--g200);font-size:11px">Dispersado ✓'+(fechaDisp?' · '+fechaDisp:'')+'</span>':
+              '<button class="btn btn-xs" style="color:var(--green);background:#F0FDF4;border-color:#BBF7D0;font-weight:600" onclick="dispersar(\''+ r.id +'\')">$ Dispersar</button>'
+            ):
+            '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
+        '</td></tr>'
+    }).join(''):'<tr><td colspan="11" class="empty">Sin registros</td></tr>')
     '</tbody></table></div>'
 }
 
@@ -1303,21 +1335,29 @@ function pMisSolicitudes(){
     '<div style="display:flex;gap:8px"><button class="btn btn-n" onclick="guardarEditPres()">Guardar cambios</button><button class="btn" onclick="S.editPres=null;S.editPresData={};render()">Cancelar</button></div>'+
     '</div>':'')+
     '<div class="card" style="padding:0;overflow:hidden">'+
-    '<table><thead><tr><th>Sem</th><th>Mes</th><th>Técnico</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th></th></tr></thead><tbody>'+
-    (mis.length?mis.map(r=>
-      '<tr'+(S.editPres===r.id?' style="background:var(--navyXL)"':'')+'>'+
-      '<td><span class="badge bs">S'+r.semana+'</span></td>'+
-      '<td style="color:var(--g600)">'+r.mes+'</td>'+
-      '<td style="font-size:12px">'+( r.tecnico_nombre||'—')+'</td>'+
-      '<td>'+r.concepto+'</td>'+
-      '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
-      '<td>'+be(r.estado)+'</td>'+
-      '<td style="white-space:nowrap;text-align:right">'+
-      '<button class="btn btn-xs" style="margin-right:4px" onclick="abrirEditPres(\''+r.id+'\')">✎ Editar</button>'+
-      '<button class="btn btn-xs btn-r" onclick="delPres(\''+r.id+'\')">✕ Eliminar</button>'+
-      '</td>'+
-      '</tr>'
-    ).join(''):'<tr><td colspan="7" class="empty">Sin solicitudes registradas</td></tr>')
+    '<table><thead><tr><th>Sem</th><th>Mes</th><th>Técnico</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th>Dispersión</th><th></th></tr></thead><tbody>'+
+    (mis.length?mis.map(r=>{
+      const estaDisp=r.estado_dispersion==='dispersado'
+      const fechaDisp=r.fecha_dispersado?new Date(r.fecha_dispersado).toLocaleDateString('es-MX'):''
+      const badgeDisp=r.estado==='APROBADO'?(
+        estaDisp?
+          '<span class="badge ba" style="font-size:11px">Dispersado ✓'+(fechaDisp?' · '+fechaDisp:'')+'</span>':
+          '<span class="badge" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;font-size:11px">Pendiente dispersión</span>'
+      ):'<span style="color:var(--g400);font-size:11px">—</span>'
+      return '<tr'+(S.editPres===r.id?' style="background:var(--navyXL)"':'')+'>'+
+        '<td><span class="badge bs">S'+r.semana+'</span></td>'+
+        '<td style="color:var(--g600)">'+r.mes+'</td>'+
+        '<td style="font-size:12px">'+( r.tecnico_nombre||'—')+'</td>'+
+        '<td>'+r.concepto+'</td>'+
+        '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
+        '<td>'+be(r.estado)+'</td>'+
+        '<td>'+badgeDisp+'</td>'+
+        '<td style="white-space:nowrap;text-align:right">'+
+        '<button class="btn btn-xs" style="margin-right:4px" onclick="abrirEditPres(\''+r.id+'\')">✎ Editar</button>'+
+        '<button class="btn btn-xs btn-r" onclick="delPres(\''+r.id+'\')">✕ Eliminar</button>'+
+        '</td>'+
+        '</tr>'
+    }).join(''):'<tr><td colspan="8" class="empty">Sin solicitudes registradas</td></tr>')
     '</tbody></table></div>'
 }
 
@@ -1338,6 +1378,10 @@ function pNuevaSolicitud(){
     '<div><label class="fl">Semana</label><input class="fi" type="number" min="1" max="53" value="'+ns.semana+'" onchange="S.ns.semana=this.value"></div>'+
     '<div><label class="fl">Mes</label><select class="fi" onchange="S.ns.mes=this.value">'+MESES.map(m=>'<option value="'+m+'"'+(ns.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
     '<div><label class="fl">Tipo</label><select class="fi" onchange="S.ns.tipo=this.value"><option value="PRESUPUESTADO"'+(ns.tipo==='PRESUPUESTADO'?' selected':'')+'>PRESUPUESTADO</option><option value="EXTRA"'+(ns.tipo==='EXTRA'?' selected':'')+'>EXTRA</option></select></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px">'+
+    '<label class="fl" style="color:var(--red)">¿Cuándo necesitas el dinero? *</label>'+
+    '<input type="date" class="fi" value="'+(ns.fecha_dispersion||'')+'" onchange="S.ns.fecha_dispersion=this.value" style="width:100%;font-size:14px">'+
     '</div>'+
     '<div class="fsec">Conceptos del viaje</div>'+
     '<div id="lineas-wrap" style="margin-bottom:10px"><p style="font-size:12px;color:var(--g400);text-align:center;padding:8px">Sin conceptos agregados</p></div>'+
