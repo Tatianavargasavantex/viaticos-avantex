@@ -135,7 +135,7 @@ let S={
   loading:false,
   f:{semana:'',mes:'',zona:'',estado:'',tecnico:''},
   sel:new Set(),
-  afe:'PENDIENTE',afz:'',afb:'',afn:'',afd:'',afed:'',
+  afe:'PENDIENTE',afz:'',afb:'',afn:'',afd:new Date().toISOString().split('T')[0],afed:'',
   f2:{zona:'',tecnico:''},
   lineas:[],capMsg:null,
   cap:(()=>{const _h=new Date(),_d=_h.getDate(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',tid:'',nota:''};})(),
