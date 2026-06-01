@@ -916,10 +916,10 @@ function pCaptura(){
   const c=S.cap
   const ts=S.tecnicos.find(t=>t.id===c.tid)
   const tf=S.tecnicos.filter(t=>(!S.zf||t.zona===S.zf)&&(!S.bf||t.nombre.toLowerCase().includes(S.bf.toLowerCase())))
-  const regs=fil(S.presupuestos).slice(0,100)
-  const total=S.lineas.reduce((a,l)=>a+l.monto,0)
-
   const _rol=S.perfil?S.perfil.rol:null
+  const _tecCoordSet=(_rol==='coordinador'&&S.tecnicos.length)?new Set(S.tecnicos.map(t=>t.nombre)):null
+  const regs=fil(S.presupuestos).filter(r=>!_tecCoordSet||_tecCoordSet.has(r.tecnico_nombre)).slice(0,100)
+  const total=S.lineas.reduce((a,l)=>a+l.monto,0)
   const _esAdminOCoord=_rol==='admin'||_rol==='coordinador'
   const _esDirecto=_rol==='vendedor'||_rol==='administracion'
   const _p=S.perfil
@@ -1028,6 +1028,7 @@ function pCaptura(){
 
 function pAprobacion(){
   let data=S.presupuestos
+  if(S.perfil&&S.perfil.rol==='coordinador'){const _ns=new Set(S.tecnicos.map(t=>t.nombre));data=data.filter(r=>_ns.has(r.tecnico_nombre))}
   if(S.afe)data=data.filter(r=>r.estado===S.afe)
   if(S.afz)data=data.filter(r=>r.zona===S.afz)
   if(S.afb)data=data.filter(r=>r.tecnico_nombre.toLowerCase().includes(S.afb.toLowerCase()))
@@ -1403,8 +1404,9 @@ async function guardarEditPres(){
 function pMisSolicitudes(){
   const mf=S.msf
   const uid=S.user.id
+  const _esCoord=S.perfil&&S.perfil.rol==='coordinador'
   const mis=S.presupuestos.filter(r=>
-    (r.coordinador_id===uid||r.tecnico_id===uid)&&
+    (_esCoord?r.tecnico_id===uid:(r.coordinador_id===uid||r.tecnico_id===uid))&&
     (!mf.mes||r.mes===mf.mes)&&
     (!mf.estado||r.estado===mf.estado)
   )
