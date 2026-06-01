@@ -292,6 +292,15 @@ async function delPres(id){
   await sb.from('presupuestos').delete().eq('id',id);await loadAll()
 }
 
+async function eliminarSolicitud(id){
+  const r=S.presupuestos.find(p=>p.id===id)
+  const nombre=r?r.tecnico_nombre:'este técnico'
+  if(!confirm('¿Eliminar esta solicitud de '+nombre+'? Esta acción no se puede deshacer.'))return
+  const{error}=await sb.from('presupuestos').delete().eq('id',id)
+  if(error){alert('Error al eliminar: '+error.message);return}
+  await loadAll()
+}
+
 function agregarLinea(){
   const conc=document.getElementById('nl-conc').value
   const monto=parseFloat(document.getElementById('nl-monto').value)
@@ -990,6 +999,7 @@ function pAprobacion(){
   const porDispersar=S.presupuestos.filter(r=>r.estado==='APROBADO'&&(r.estado_dispersion||'pendiente')==='pendiente').length
   const sel=S.sel
   const totSel=Array.from(sel).reduce((a,id)=>{const r=S.presupuestos.find(r=>r.id===id);return a+(r?r.monto:0)},0)
+  const esAdmin=S.perfil&&S.perfil.rol==='admin'
 
   return '<div class="pg-t">Aprobación de presupuestos</div>'+
     '<div class="pg-s">Autoriza o rechaza solicitudes pendientes de aprobación</div>'+
@@ -1042,6 +1052,7 @@ function pAprobacion(){
               '<button class="btn btn-xs" style="color:var(--green);background:#F0FDF4;border-color:#BBF7D0;font-weight:600" onclick="dispersar(\''+ r.id +'\')">$ Dispersar</button>'
             ):
             '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
+        (esAdmin?' <button class="btn btn-xs" style="color:var(--red);background:#FFF1F2;border-color:#FECACA;margin-left:6px" onclick="eliminarSolicitud(\''+r.id+'\')" title="Eliminar solicitud">🗑</button>':'')+
         '</td></tr>'
     }).join(''):'<tr><td colspan="12" class="empty">Sin registros</td></tr>')
     '</tbody></table></div>'
