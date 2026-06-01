@@ -363,10 +363,12 @@ async function guardarNuevaSolicitud(){
   if(S.lineas.length===0)return
   const p=S.perfil
   const ns=S.ns
+  const tec=S.tecnicos.find(t=>t.nombre===p.nombre)
+  if(!tec){S.nsMsg={t:'e',m:'No tienes un técnico asociado en el sistema. Contacta a tu coordinador o administrador.'};render();return}
   const rows=S.lineas.map(l=>({
     semana:parseInt(ns.semana),mes:ns.mes,anio:parseInt(ns.anio),
-    tipo:ns.tipo,tecnico_id:S.user.id,tecnico_nombre:p.nombre,
-    zona:p.zona||'MATRIZ',ciudad:'',udn:'',coordinador:'',
+    tipo:ns.tipo,tecnico_id:tec.id,tecnico_nombre:tec.nombre,
+    zona:tec.zona,ciudad:tec.ciudad||'',udn:tec.udn||'',coordinador:tec.coordinador||'',
     concepto:l.concepto,monto:l.monto,local_viaje:l.lv,
     comentarios:ns.nota||null,coordinador_id:S.user.id,estado:'PENDIENTE'
   }))
@@ -428,7 +430,7 @@ function editarTecnico(id){
 
 async function guardarEditTecnico(){
   const d=S.editTecData
-  const{error}=await sb.from('tecnicos').update({nombre:d.nombre,zona:d.zona,ciudad:d.ciudad||'',udn:d.udn||'',coordinador:d.coordinador||'',region:d.region||'',subsede:d.subsede||'',estado:d.estado||'',activo:d.activo}).eq('id',S.editTec)
+  const{error}=await sb.from('tecnicos').update({nombre:d.nombre,zona:d.zona,ciudad:d.ciudad||'',udn:d.udn||'',coordinador:d.coordinador||'',region:d.region||'',subsede:d.subsede||'',activo:d.activo}).eq('id',S.editTec)
   if(error){alert('Error: '+error.message);return}
   S.editTec=null;S.editTecData={}
   await loadAll()
