@@ -1076,6 +1076,7 @@ function pCaptura(){
     '<label class="fl">Ruta</label>'+
     '<input class="fi" list="cap-rutas-list" placeholder="Busca tu ruta..." value="'+(c.ruta||'')+'" oninput="S.cap.ruta=this.value" style="width:100%">'+
     '<datalist id="cap-rutas-list">'+
+    '<option value="N/A">N/A — No aplica</option>'+
     S.rutas.map(r=>'<option value="'+r.ruta+'">'+r.ruta+' — '+r.region+'</option>').join('')+
     '</datalist>'+
     '</div>'+
@@ -1694,6 +1695,7 @@ function pNuevaSolicitud(){
     '<label class="fl">Ruta</label>'+
     '<input class="fi" list="ns-rutas-list" placeholder="Busca tu ruta..." value="'+(ns.ruta||'')+'" oninput="S.ns.ruta=this.value" style="width:100%">'+
     '<datalist id="ns-rutas-list">'+
+    '<option value="N/A">N/A — No aplica</option>'+
     S.rutas.map(r=>'<option value="'+r.ruta+'">'+r.ruta+' — '+r.region+'</option>').join('')+
     '</datalist>'+
     '</div>'+
