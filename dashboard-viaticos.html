@@ -799,6 +799,22 @@ function xlsxPorRuta(){
     Object.values(rv).sort((a,b)=>b.p-a.p).map(x=>[x.r,x.p,x.g,x.p-x.g,pct(x.g,x.p)+'%',x.n])
   )
 }
+function xlsxComparativo(){
+  let pres=S.presupuestos
+  if(S.f2.mes)pres=pres.filter(r=>r.mes===S.f2.mes)
+  if(S.f2.concepto)pres=pres.filter(r=>r.concepto===S.f2.concepto)
+  let banco2=S.banco
+  if(S.f2.mes)banco2=banco2.filter(r=>r.mes===S.f2.mes)
+  const map={}
+  pres.forEach(r=>{if(!map[r.tecnico_nombre])map[r.tecnico_nombre]={t:r.tecnico_nombre,z:r.zona,c:r.coordinador||'',p:0,g:0};map[r.tecnico_nombre].p+=r.monto})
+  banco2.forEach(r=>{if(map[r.tecnico_nombre])map[r.tecnico_nombre].g+=(r.monto||0)})
+  const rf=Object.values(map).sort((a,b)=>b.p-a.p)
+    .filter(r=>(!S.f2.zona||r.z===S.f2.zona)&&(!S.f2.tecnico||r.t.toLowerCase().includes(S.f2.tecnico.toLowerCase()))&&(!S.f2.coordinador||r.c.toLowerCase().includes(S.f2.coordinador.toLowerCase())))
+  xlsxDown('comparativo_banco'+(S.f2.mes?'_'+S.f2.mes:'')+'.xlsx',
+    ['Tecnico','Zona','Coordinador','Presupuesto','Gasto banco','Diferencia','% Avance','Estado'],
+    rf.map(r=>{const d=r.p-r.g,p2=pct(r.g,r.p);return[r.t,r.z,r.c,r.p,r.g,d,p2+'%',r.g>r.p?'Excedido':p2>85?'Alerta':'OK']})
+  )
+}
 function xlsxUsuarios(){
   xlsxDown('usuarios.xlsx',
     ['Nombre','Correo','Rol','Zona','Activo'],
@@ -1251,7 +1267,9 @@ function pComparativo(){
     (S.banco.length===0?'<div class="notice"><strong>Sin datos del banco</strong> · Cuando tengas el reporte bancario, el administrador puede cargarlo para activar este comparativo.</div>':'')+
     '<div class="card">'+
     '<div class="ch"><div><div class="ct">Detalle por técnico</div><div class="cs">'+rf.length+' técnicos</div></div>'+
-    '<div class="flt" style="margin:0;flex-wrap:wrap">'+
+    (S.perfil&&['admin','supervisor','coordinador'].includes(S.perfil.rol)?'<button class="btn btn-sm" onclick="xlsxComparativo()" style="border-color:#BBF7D0;color:#15803D;font-weight:600">📊 Descargar Excel</button>':'')+
+    '</div>'+
+    '<div class="flt" style="margin-top:10px;flex-wrap:wrap">'+
     '<select class="fs" onchange="S.f2.mes=this.value;render()"><option value="">Todos los meses</option>'+MESES.map(m=>'<option value="'+m+'"'+(S.f2.mes===m?' selected':'')+'>'+m.charAt(0)+m.slice(1).toLowerCase()+'</option>').join('')+'</select>'+
     '<select class="fs" onchange="S.f2.zona=this.value;render()"><option value="">Todas las zonas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.f2.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select>'+
     '<select class="fs" onchange="S.f2.concepto=this.value;render()"><option value="">Todos los conceptos</option>'+CONCEPTOS.map(c=>'<option value="'+c+'"'+(S.f2.concepto===c?' selected':'')+'>'+c+'</option>').join('')+'</select>'+
