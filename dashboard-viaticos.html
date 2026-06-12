@@ -136,7 +136,7 @@ let S={
   f:{semana:'',mes:'',zona:'',estado:'',tecnico:''},
   sel:new Set(),
   afe:'PENDIENTE',afz:'',afb:'',afn:'',afd_desde:(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1).toISOString().split('T')[0]})(),afd_hasta:(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().split('T')[0]})(),afed:'',
-  f2:{zona:'',tecnico:''},
+  f2:{zona:'',tecnico:'',coordinador:'',concepto:'',mes:''},
   lineas:[],capMsg:null,
   cap:(()=>{const _h=new Date(),_d=_h.getDate(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),
   zf:'',bf:'',nszf:'',nsbf:'',
@@ -181,6 +181,23 @@ function filBanco(arr){
     (!f.mes||r.mes===f.mes)&&
     (!f.zona||r.zona===f.zona)
   )
+}
+
+function semanasDelMes(mes,anio){
+  const mi=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'].indexOf(mes)
+  if(mi<0)return[{n:1,d:1,h:7},{n:2,d:8,h:14},{n:3,d:15,h:21},{n:4,d:22,h:28}]
+  const dias=new Date(anio,mi+1,0).getDate()
+  const ss=[{n:1,d:1,h:7},{n:2,d:8,h:14},{n:3,d:15,h:21},{n:4,d:22,h:Math.min(28,dias)}]
+  if(dias>28)ss.push({n:5,d:29,h:dias})
+  return ss
+}
+function labelSem(n,mes,anio){
+  const mn=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+  const mi=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'].indexOf(mes)
+  const nm=mi>=0?mn[mi]:''
+  const s=semanasDelMes(mes,anio).find(x=>x.n===n)
+  if(!s)return'S'+n
+  return'S'+n+': '+s.d+' '+nm+' — '+s.h+' '+nm
 }
 
 async function fetchAll(queryFn){
@@ -750,6 +767,39 @@ function csvCH(){
   csvDownload('capital_humano_'+(S.chf.mes||'TodoElAno')+'.csv',[['Mes','Semana','Categoria','Subcategoria','Area','Descripcion','Monto','Estado'],...data.map(r=>[r.mes,r.semana||1,r.categoria,r.subcategoria||'',r.area||'MATRIZ',r.descripcion||'',r.monto,r.estado])])
 }
 
+function xlsxDown(filename,headers,rows){
+  if(typeof XLSX==='undefined'){alert('Librería Excel no cargada, intenta de nuevo');return}
+  const ws=XLSX.utils.aoa_to_sheet([headers,...rows])
+  const wb=XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb,ws,'Datos')
+  XLSX.writeFile(wb,filename)
+}
+function xlsxPresupuestos(){
+  const data=fil(S.presupuestos)
+  xlsxDown('presupuestos_'+(S.f.mes||'TodoElAno')+'.xlsx',
+    ['Semana','Mes','Tipo','Tecnico','Zona','Ciudad','UDN','Ruta','Concepto','Monto','Estado','Comentarios'],
+    data.map(r=>[r.semana,r.mes,r.tipo||'',r.tecnico_nombre,r.zona,r.ciudad||'',r.udn||'',r.ruta||'SIN RUTA',r.concepto,r.monto,r.estado,r.comentarios||''])
+  )
+}
+function xlsxPorTecnico(){
+  const data=fil(S.presupuestos);const banco=filBanco(S.banco);const t={}
+  data.forEach(r=>{if(!t[r.tecnico_nombre])t[r.tecnico_nombre]={t:r.tecnico_nombre,z:r.zona,u:r.udn||'',c:r.coordinador||'',p:0,g:0};t[r.tecnico_nombre].p+=r.monto})
+  banco.forEach(r=>{if(t[r.tecnico_nombre])t[r.tecnico_nombre].g+=(r.monto||0)})
+  xlsxDown('por_tecnico_'+(S.f.mes||'TodoElAno')+'.xlsx',
+    ['Tecnico','Zona','UDN','Coordinador','Presupuesto','Gasto','Diferencia','% Avance'],
+    Object.values(t).sort((a,b)=>b.p-a.p).map(r=>[r.t,r.z,r.u,r.c,r.p,r.g,r.p-r.g,pct(r.g,r.p)+'%'])
+  )
+}
+function xlsxPorRuta(){
+  const data=fil(S.presupuestos);const banco=filBanco(S.banco);const rv={}
+  data.forEach(x=>{const rt=x.ruta||'SIN RUTA';if(!rv[rt])rv[rt]={r:rt,p:0,g:0,n:0};rv[rt].p+=x.monto;rv[rt].n++})
+  banco.forEach(x=>{const rt=x.ruta||'SIN RUTA';if(rv[rt])rv[rt].g+=(x.monto||0)})
+  xlsxDown('por_ruta_'+(S.f.mes||'TodoElAno')+'.xlsx',
+    ['Ruta','Presupuesto','Gasto','Diferencia','% Avance','Registros'],
+    Object.values(rv).sort((a,b)=>b.p-a.p).map(x=>[x.r,x.p,x.g,x.p-x.g,pct(x.g,x.p)+'%',x.n])
+  )
+}
+
 function sidebar(){
   const rol=S.perfil?S.perfil.rol:'coordinador'
   const pend=S.presupuestos.filter(r=>r.estado==='PENDIENTE').length
@@ -893,14 +943,23 @@ function pResumen(){
         '<td style="text-align:right" class="'+(d>=0?'pos':'neg')+'">'+( d>=0?'+':'')+fmt(d)+'</td></tr>'
     }).join('')+'</tbody></table></div></div>'+
     '<div class="card" style="margin-bottom:16px"><div class="ch"><div><div class="ct">Exportar datos</div><div class="cs">Descarga con filtros activos</div></div></div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+    '<div style="font-size:10px;color:var(--g400);letter-spacing:.5px;text-transform:uppercase;font-weight:600;margin-bottom:6px">CSV</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+
     '<button class="btn btn-sm" onclick="csvPresupuestos()" style="border-color:var(--navyL);color:var(--navy)">⬇ Detalle completo</button>'+
     '<button class="btn btn-sm" onclick="csvPorZona()" style="border-color:var(--navyL);color:var(--navy)">⬇ Por zona</button>'+
     '<button class="btn btn-sm" onclick="csvPorConcepto()" style="border-color:var(--navyL);color:var(--navy)">⬇ Por concepto</button>'+
     '<button class="btn btn-sm" onclick="csvPorTecnico()" style="border-color:var(--navyL);color:var(--navy)">⬇ Por técnico</button>'+
     '<button class="btn btn-sm" onclick="csvPorRuta()" style="border-color:#BBF7D0;color:var(--green)">⬇ Por ruta</button>'+
     '<button class="btn btn-sm" onclick="csvTotalesMes()" style="border-color:var(--navyL);color:var(--navy)">⬇ Totales por mes</button>'+
-    '</div></div>'+
+    '</div>'+
+    (S.perfil&&['admin','supervisor','coordinador'].includes(S.perfil.rol)?
+    '<div style="font-size:10px;color:#15803D;letter-spacing:.5px;text-transform:uppercase;font-weight:600;margin-bottom:6px">Excel</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+    '<button class="btn btn-sm" onclick="xlsxPresupuestos()" style="border-color:#BBF7D0;color:#15803D;font-weight:600">📊 Presupuestos</button>'+
+    '<button class="btn btn-sm" onclick="xlsxPorTecnico()" style="border-color:#BBF7D0;color:#15803D;font-weight:600">📊 Por técnico</button>'+
+    '<button class="btn btn-sm" onclick="xlsxPorRuta()" style="border-color:#BBF7D0;color:#15803D;font-weight:600">📊 Por ruta</button>'+
+    '</div>':'')+
+    '</div>'+
     '<div class="card"><div class="ch"><div class="ct">Top técnicos — presupuesto vs gasto</div></div>'+
     '<table><thead><tr><th>Técnico</th><th>Zona</th><th style="text-align:right">Presupuesto</th><th style="text-align:right">Gasto</th><th style="text-align:right">Diferencia</th><th>Avance</th></tr></thead><tbody>'+
     topT.map(function(e){
@@ -951,11 +1010,11 @@ function pCaptura(){
       '</div>':'')+
     '<div class="fsec">Periodo</div>'+
     '<div class="fr">'+
-    '<div><label class="fl">Semana</label><input class="fi" type="number" min="1" max="53" value="'+c.semana+'" onchange="S.cap.semana=this.value"></div>'+
-    '<div><label class="fl">Mes</label><select class="fi" onchange="S.cap.mes=this.value">'+MESES.map(m=>'<option value="'+m+'"'+(c.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Mes</label><select class="fi" onchange="S.cap.mes=this.value;render()">'+MESES.map(m=>'<option value="'+m+'"'+(c.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Semana</label><select class="fi" onchange="S.cap.semana=this.value">'+semanasDelMes(c.mes,parseInt(c.anio)).map(s=>'<option value="'+s.n+'"'+(parseInt(c.semana)===s.n?' selected':'')+'>'+labelSem(s.n,c.mes,parseInt(c.anio))+'</option>').join('')+'</select></div>'+
     (_esDirecto?
-    '<div><label class="fl">Tipo</label><div style="padding:8px 10px;background:var(--navyL);border-radius:6px;font-size:12px;color:var(--navy)">EXTRA</div></div>':
-    '<div><label class="fl">Tipo</label><select class="fi" onchange="S.cap.tipo=this.value"><option value="PRESUPUESTADO"'+(c.tipo==='PRESUPUESTADO'?' selected':'')+'>PRESUPUESTADO</option><option value="EXTRA"'+(c.tipo==='EXTRA'?' selected':'')+'>EXTRA</option></select></div>')+
+    '<div><label class="fl">Tipo</label><div style="padding:8px 10px;background:#FEF3C7;border-radius:6px;font-size:12px;color:var(--amber);font-weight:600">⚡ EXTRA</div></div>':
+    '<div><label class="fl">Tipo</label><select class="fi" onchange="S.cap.tipo=this.value;render()" style="font-weight:700;color:'+(c.tipo==='EXTRA'?'var(--red)':'#1D4ED8')+'"><option value="PRESUPUESTADO"'+(c.tipo==='PRESUPUESTADO'?' selected':'')+'>✔ PRESUPUESTADO</option><option value="EXTRA"'+(c.tipo==='EXTRA'?' selected':'')+'>⚡ EXTRA</option></select></div>')+
     '</div>'+
     '<div style="margin-bottom:12px">'+
     '<label class="fl" style="color:var(--red)">¿Cuándo necesitas el dinero? *</label>'+
@@ -1037,17 +1096,18 @@ function pCaptura(){
     '<input class="fin" placeholder="Buscar técnico..." value="'+(S.f.tecnico||'')+'" onchange="S.f.tecnico=this.value;render()" style="width:160px">'+
     (S.capf.estado||S.capf.mes||S.capf.semana||S.f.tecnico?'<button class="btn btn-sm" onclick="S.capf={estado:\'\',mes:\'\',semana:\'\'};S.f.tecnico=\'\';render()" style="font-size:11px;color:var(--red);border-color:#FECACA">✕ Limpiar</button>':'')+
     '</div>'+
-    '<div class="tw"><table><thead><tr><th>Sem</th><th>Mes</th><th>Técnico</th><th>Zona</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th></th></tr></thead><tbody>'+
+    '<div class="tw"><table><thead><tr><th>Sem</th><th>Mes</th><th>Tipo</th><th>Técnico</th><th>Zona</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th></th></tr></thead><tbody>'+
     (regs.length?regs.map(r=>'<tr>'+
       '<td><span class="badge bs">S'+r.semana+'</span></td>'+
       '<td style="color:var(--g600);font-size:12px">'+r.mes+'</td>'+
+      '<td>'+(r.tipo==='EXTRA'?'<span class="badge br" style="font-size:10px">⚡ EXTRA</span>':'<span class="badge" style="background:#EFF6FF;color:#1D4ED8;font-size:10px">✔ PRESUP.</span>')+'</td>'+
       '<td style="font-weight:600">'+r.tecnico_nombre+'</td>'+
       '<td><span class="badge bz">'+r.zona+'</span></td>'+
       '<td style="color:var(--g600);font-size:12px">'+r.concepto+'</td>'+
       '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
       '<td>'+be(r.estado)+(r.comentario_aprobacion?'<div style="font-size:10px;color:var(--g600);margin-top:3px">💬 '+r.comentario_aprobacion+'</div>':'')+'</td>'+
       '<td>'+(r.estado==='PENDIENTE'?'<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="delPres(\''+r.id+'\')">✕</button>':'')+'</td>'+
-     '</tr>').join(''):'<tr><td colspan="8" class="empty">No hay registros aún</td></tr>')+
+     '</tr>').join(''):'<tr><td colspan="9" class="empty">No hay registros aún</td></tr>')+
     '</tbody></table></div></div></div>'
 }
 
@@ -1154,15 +1214,19 @@ function pAprobacion(){
 }
 
 function pComparativo(){
-  const pres=fil(S.presupuestos)
+  let pres=S.presupuestos
+  if(S.f2.mes)pres=pres.filter(r=>r.mes===S.f2.mes)
+  if(S.f2.concepto)pres=pres.filter(r=>r.concepto===S.f2.concepto)
+  let banco2=S.banco
+  if(S.f2.mes)banco2=banco2.filter(r=>r.mes===S.f2.mes)
   const map={}
-  pres.forEach(r=>{if(!map[r.tecnico_nombre])map[r.tecnico_nombre]={t:r.tecnico_nombre,z:r.zona,p:0,g:0};map[r.tecnico_nombre].p+=r.monto})
-  S.banco.forEach(r=>{if(map[r.tecnico_nombre])map[r.tecnico_nombre].g+=(r.monto||0)})
+  pres.forEach(r=>{if(!map[r.tecnico_nombre])map[r.tecnico_nombre]={t:r.tecnico_nombre,z:r.zona,c:r.coordinador||'',p:0,g:0};map[r.tecnico_nombre].p+=r.monto})
+  banco2.forEach(r=>{if(map[r.tecnico_nombre])map[r.tecnico_nombre].g+=(r.monto||0)})
   const rows=Object.values(map).sort((a,b)=>b.p-a.p)
   const totP=rows.reduce((a,r)=>a+r.p,0)
   const totG=rows.reduce((a,r)=>a+r.g,0)
   const exc=rows.filter(r=>r.g>r.p).length
-  const rf=rows.filter(r=>(!S.f2.zona||r.z===S.f2.zona)&&(!S.f2.tecnico||r.t.toLowerCase().includes(S.f2.tecnico.toLowerCase())))
+  const rf=rows.filter(r=>(!S.f2.zona||r.z===S.f2.zona)&&(!S.f2.tecnico||r.t.toLowerCase().includes(S.f2.tecnico.toLowerCase()))&&(!S.f2.coordinador||r.c.toLowerCase().includes(S.f2.coordinador.toLowerCase())))
 
   return '<div class="pg-t">Comparativo banco</div>'+
     '<div class="pg-s">Presupuesto asignado vs gasto real del banco</div>'+
@@ -1175,9 +1239,13 @@ function pComparativo(){
     (S.banco.length===0?'<div class="notice"><strong>Sin datos del banco</strong> · Cuando tengas el reporte bancario, el administrador puede cargarlo para activar este comparativo.</div>':'')+
     '<div class="card">'+
     '<div class="ch"><div><div class="ct">Detalle por técnico</div><div class="cs">'+rf.length+' técnicos</div></div>'+
-    '<div class="flt" style="margin:0">'+
+    '<div class="flt" style="margin:0;flex-wrap:wrap">'+
+    '<select class="fs" onchange="S.f2.mes=this.value;render()"><option value="">Todos los meses</option>'+MESES.map(m=>'<option value="'+m+'"'+(S.f2.mes===m?' selected':'')+'>'+m.charAt(0)+m.slice(1).toLowerCase()+'</option>').join('')+'</select>'+
     '<select class="fs" onchange="S.f2.zona=this.value;render()"><option value="">Todas las zonas</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(S.f2.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select>'+
-    '<input class="fin" placeholder="Buscar..." value="'+(S.f2.tecnico||'')+'" onchange="S.f2.tecnico=this.value;render()">'+
+    '<select class="fs" onchange="S.f2.concepto=this.value;render()"><option value="">Todos los conceptos</option>'+CONCEPTOS.map(c=>'<option value="'+c+'"'+(S.f2.concepto===c?' selected':'')+'>'+c+'</option>').join('')+'</select>'+
+    '<input class="fin" placeholder="Buscar técnico..." value="'+(S.f2.tecnico||'')+'" onchange="S.f2.tecnico=this.value;render()" style="width:150px">'+
+    '<input class="fin" placeholder="Buscar coordinador..." value="'+(S.f2.coordinador||'')+'" onchange="S.f2.coordinador=this.value;render()" style="width:160px">'+
+    (S.f2.mes||S.f2.zona||S.f2.concepto||S.f2.tecnico||S.f2.coordinador?'<button class="btn btn-sm" onclick="S.f2={zona:\'\',tecnico:\'\',coordinador:\'\',concepto:\'\',mes:\'\'};render()" style="font-size:11px;color:var(--red);border-color:#FECACA">✕ Limpiar</button>':'')+
     '</div></div>'+
     '<div class="tw"><table><thead><tr><th>Técnico</th><th>Zona</th><th style="text-align:right">Presupuesto</th><th style="text-align:right">Gasto banco</th><th style="text-align:right">Diferencia</th><th>Avance</th><th>Estado</th></tr></thead><tbody>'+
     (rf.length?rf.map(function(r){
@@ -1203,12 +1271,13 @@ function pTecnicos(){
   const n=S.nt2
   const ed=S.editTecData
   const REGIONES=['MATRIZ','NOROESTE','NORESTE','CENTRO','BAJIO','PACIFICO','SURESTE']
+  const _canCreateTec=S.perfil&&['admin','coordinador','supervisor'].includes(S.perfil.rol)
   return '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">'+
     '<div><div class="pg-t">Catálogo de técnicos</div><div style="font-size:13px;color:var(--g600);margin-top:3px">'+S.tecnicos.length+' técnicos registrados</div></div>'+
-    '<button class="btn btn-n" onclick="S.showNt2=!S.showNt2;S.editTec=null;S.editTecData={};render()">'+(S.showNt2?'✕ Cancelar':'+ Nuevo técnico')+'</button>'+
+    (_canCreateTec?'<button class="btn btn-n" onclick="S.showNt2=!S.showNt2;S.editTec=null;S.editTecData={};render()">'+(S.showNt2?'✕ Cancelar':'+ Nuevo técnico')+'</button>':'')+
     '</div>'+
     (S.nt2Msg?'<div class="'+(S.nt2Msg.t==='o'?'ok-msg':'err-msg')+'" style="margin-bottom:16px">'+S.nt2Msg.m+'</div>':'')+
-    (S.showNt2?'<div class="card" style="margin-bottom:20px"><div class="ct" style="margin-bottom:14px">Nuevo técnico</div>'+
+    (S.showNt2&&_canCreateTec?'<div class="card" style="margin-bottom:20px"><div class="ct" style="margin-bottom:14px">Nuevo técnico</div>'+
     '<div class="fr2" style="margin-bottom:8px">'+
     '<div><label class="fl">Nombre *</label><input class="fi" placeholder="Ej. JUAN GARCIA" value="'+(n.nombre||'')+'" oninput="S.nt2.nombre=this.value.toUpperCase()"></div>'+
     '<div><label class="fl">Zona *</label><select class="fi" onchange="S.nt2.zona=this.value"><option value="">Selecciona...</option>'+ZONAS.map(z=>'<option value="'+z+'"'+(n.zona===z?' selected':'')+'>'+z+'</option>').join('')+'</select></div>'+
@@ -1555,8 +1624,8 @@ function pNuevaSolicitud(){
     :'')+
     '<div class="fsec">Periodo</div>'+
     '<div class="fr2">'+
-    '<div><label class="fl">Semana</label><input class="fi" type="number" min="1" max="53" value="'+ns.semana+'" onchange="S.ns.semana=this.value"></div>'+
-    '<div><label class="fl">Mes</label><select class="fi" onchange="S.ns.mes=this.value">'+MESES.map(m=>'<option value="'+m+'"'+(ns.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Mes</label><select class="fi" onchange="S.ns.mes=this.value;render()">'+MESES.map(m=>'<option value="'+m+'"'+(ns.mes===m?' selected':'')+'>'+m+'</option>').join('')+'</select></div>'+
+    '<div><label class="fl">Semana</label><select class="fi" onchange="S.ns.semana=this.value">'+semanasDelMes(ns.mes,parseInt(ns.anio)).map(s=>'<option value="'+s.n+'"'+(parseInt(ns.semana)===s.n?' selected':'')+'>'+labelSem(s.n,ns.mes,parseInt(ns.anio))+'</option>').join('')+'</select></div>'+
     '</div>'+
     '<div style="margin-bottom:12px">'+
     '<label class="fl" style="color:var(--red)">¿Cuándo necesitas el dinero? *</label>'+
