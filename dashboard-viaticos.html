@@ -799,6 +799,20 @@ function xlsxPorRuta(){
     Object.values(rv).sort((a,b)=>b.p-a.p).map(x=>[x.r,x.p,x.g,x.p-x.g,pct(x.g,x.p)+'%',x.n])
   )
 }
+function xlsxAprobacion(){
+  let data=S.presupuestos
+  if(S.perfil&&S.perfil.rol==='coordinador'){const _ns=new Set(S.tecnicos.map(t=>t.nombre));data=data.filter(r=>_ns.has(r.tecnico_nombre))}
+  if(S.afe)data=data.filter(r=>r.estado===S.afe)
+  if(S.afz)data=data.filter(r=>r.zona===S.afz)
+  if(S.afb)data=data.filter(r=>r.tecnico_nombre.toLowerCase().includes(S.afb.toLowerCase()))
+  if(S.afe!=='PENDIENTE'&&(S.afd_desde||S.afd_hasta))data=data.filter(r=>{if(!r.fecha_dispersion)return true;if(S.afd_desde&&r.fecha_dispersion<S.afd_desde)return false;if(S.afd_hasta&&r.fecha_dispersion>S.afd_hasta)return false;return true})
+  if(S.afed)data=data.filter(r=>(r.estado_dispersion||'pendiente')===S.afed)
+  data=[...data].sort((a,b)=>(!a.fecha_dispersion&&!b.fecha_dispersion)?0:!a.fecha_dispersion?1:!b.fecha_dispersion?-1:a.fecha_dispersion<b.fecha_dispersion?-1:1)
+  xlsxDown('aprobacion'+(S.afe?'_'+S.afe:'')+'.xlsx',
+    ['Semana','Mes','Técnico','Zona','UDN','Coordinador','Ruta','Concepto','Monto','Estado','Dispersión','Fecha disp.','Fecha inicio viaje','Fecha fin viaje','Comentarios'],
+    data.map(r=>[r.semana,r.mes,r.tecnico_nombre,r.zona,r.udn||'',r.coordinador||'',r.ruta||'',r.concepto,r.monto,r.estado,r.estado_dispersion||'pendiente',r.fecha_dispersion||'',r.fecha_inicio_viaje||'',r.fecha_fin_viaje||'',r.comentarios||''])
+  )
+}
 function xlsxComparativo(){
   let pres=S.presupuestos
   if(S.f2.mes)pres=pres.filter(r=>r.mes===S.f2.mes)
@@ -1181,6 +1195,7 @@ function pAprobacion(){
     '<input type="date" class="fin" title="Desde" value="'+(S.afd_desde||'')+'" onchange="S.afd_desde=this.value;render()" style="width:150px">'+
     '<input type="date" class="fin" title="Hasta" value="'+(S.afd_hasta||'')+'" onchange="S.afd_hasta=this.value;render()" style="width:150px">'+
     '<select class="fs" onchange="S.afed=this.value;render()"><option value="">Todas las dispersiones</option><option value="pendiente"'+(S.afed==='pendiente'?' selected':'')+'>Pendiente dispersión</option><option value="dispersado"'+(S.afed==='dispersado'?' selected':'')+'>Dispersado</option></select>'+
+    (S.perfil&&['admin','supervisor'].includes(S.perfil.rol)?'<button class="btn btn-sm" onclick="xlsxAprobacion()" style="border-color:#BBF7D0;color:#15803D;font-weight:600;margin-left:4px">📊 Descargar Excel</button>':'')+
     '</div>'+
     (sel.size>0?'<div class="abar">'+
     '<span style="font-size:13px;color:var(--navy);font-weight:600">'+sel.size+' seleccionados · '+fmt(totSel)+'</span>'+
