@@ -799,6 +799,12 @@ function xlsxPorRuta(){
     Object.values(rv).sort((a,b)=>b.p-a.p).map(x=>[x.r,x.p,x.g,x.p-x.g,pct(x.g,x.p)+'%',x.n])
   )
 }
+function xlsxUsuarios(){
+  xlsxDown('usuarios.xlsx',
+    ['Nombre','Correo','Rol','Zona','Activo'],
+    S.usuarios.map(u=>[u.nombre||'',u.email||'',u.rol||'',u.zona||'',u.activo?'Sí':'No'])
+  )
+}
 function xlsxTecnicos(){
   xlsxDown('tecnicos.xlsx',
     ['Nombre','Zona','Ciudad','UDN','Coordinador','Región','Subsede','Estado Rep.','Activo'],
@@ -1423,6 +1429,7 @@ function pUsuarios(){
     '<div style="display:flex;gap:8px;align-items:center">'+
     '<button class="btn btn-xs" style="color:var(--g600)" onclick="descargarPlantilla()">⬇ Plantilla</button>'+
     '<button class="btn btn-xs" onclick="abrirImportExcel()">📥 Importar Excel</button>'+
+    '<button class="btn btn-xs" onclick="xlsxUsuarios()" style="border-color:#BBF7D0;color:#15803D;font-weight:600">📊 Descargar Excel</button>'+
     '<button class="btn btn-n" onclick="S.showNu=!S.showNu;render()">+ Nuevo usuario</button>'+
     '</div>'+
     '</div>'+
