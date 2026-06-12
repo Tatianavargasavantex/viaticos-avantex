@@ -132,7 +132,7 @@ const POL={MATRIZ:400,FORANEOS:400,SURESTE:300,BAJIO:300,CDMX:250}
 
 let S={
   user:null,perfil:null,page:'resumen',
-  presupuestos:[],tecnicos:[],usuarios:[],banco:[],rutas:[],
+  presupuestos:[],tecnicos:[],usuarios:[],banco:[],rutas:[],dispersiones:[],
   loading:false,
   f:{semana:'',mes:'',zona:'',estado:'',tecnico:''},
   sel:new Set(),
@@ -158,7 +158,8 @@ let S={
   editPres:null,editPresData:{},
   importPreview:null,importProgress:null,
   generandoFijos:false,
-  aprobando:null,motivoAprobacion:''
+  aprobando:null,motivoAprobacion:'',
+  dispModal:null,dispHistorial:null
 }
 
 const fmt=n=>'$'+Math.round(n||0).toLocaleString('es-MX')
@@ -227,12 +228,14 @@ async function loadAll(){
   S.tecnicos=t.data||[]
   S.usuarios=u.data||[]
   S.rutas=rv.data||[]
-  const[presupuestos,banco]=await Promise.all([
+  const[presupuestos,banco,dispersiones]=await Promise.all([
     fetchAll(()=>sb.from('presupuestos').select('*').order('creado_en',{ascending:false})),
     fetchAll(()=>sb.from('gastos_banco').select('*').order('creado_en',{ascending:false})),
+    fetchAll(()=>sb.from('dispersiones').select('*').order('created_at',{ascending:false})),
   ])
   S.presupuestos=presupuestos
   S.banco=banco
+  S.dispersiones=dispersiones
   try{const ch=await sb.from('ch_gastos').select('*').order('creado_en',{ascending:false}).limit(20000);S.chGastos=ch.data||[]}catch(e){S.chGastos=[]}
   S.loading=false
   const _rol=S.perfil?S.perfil.rol:null
@@ -319,23 +322,45 @@ async function confirmarAprobacion(){
   await loadAll()
 }
 
-async function dispersar(id){
-  const{error}=await sb.from('presupuestos').update({
-    estado_dispersion:'dispersado',
-    fecha_dispersado:new Date().toISOString(),
-    dispersado_por:S.perfil?S.perfil.nombre:''
-  }).eq('id',id)
-  if(error){alert('Error al dispersar: '+error.message);return}
+function getTotalDisp(pid){
+  return(S.dispersiones||[]).filter(d=>d.presupuesto_id===pid).reduce((a,d)=>a+(d.monto||0),0)
+}
+function getSaldoPend(r){
+  return Math.max(0,(r.monto||0)-getTotalDisp(r.id))
+}
+function abrirDispModal(id){
+  const r=S.presupuestos.find(p=>p.id===id)
+  if(!r)return
+  const totalDisp=getTotalDisp(id)
+  const saldo=getSaldoPend(r)
+  S.dispModal={pid:id,tecnico:r.tecnico_nombre,montoTotal:r.monto,totalDisp,saldo,monto:String(Math.round(saldo)),fecha:new Date().toISOString().split('T')[0],nota:''}
+  render()
+}
+function cerrarDispModal(){S.dispModal=null;render()}
+async function guardarDispersion(){
+  const m=S.dispModal
+  if(!m)return
+  const monto=parseFloat(m.monto)
+  if(!monto||monto<=0){alert('Ingresa un monto válido');return}
+  if(monto>m.saldo+0.01){alert('El monto ('+fmt(monto)+') excede el saldo pendiente ('+fmt(m.saldo)+')');return}
+  if(!m.fecha){alert('Selecciona la fecha de dispersión');return}
+  const{data:{user}}=await sb.auth.getUser()
+  const{error}=await sb.from('dispersiones').insert([{presupuesto_id:m.pid,monto,fecha:m.fecha,usuario_id:user.id,usuario_nombre:S.perfil?S.perfil.nombre:'',nota:m.nota||null}])
+  if(error){alert('Error al guardar dispersión: '+error.message);return}
+  const nuevoTotal=m.totalDisp+monto
+  const nuevoEst=nuevoTotal>=m.montoTotal-0.01?'dispersado':'parcial'
+  await sb.from('presupuestos').update({
+    estado_dispersion:nuevoEst,
+    fecha_dispersado:nuevoEst==='dispersado'?new Date().toISOString():null,
+    dispersado_por:nuevoEst==='dispersado'?(S.perfil?S.perfil.nombre:''):null
+  }).eq('id',m.pid)
+  S.dispModal=null
   await loadAll()
 }
-
 async function revertirDispersion(id){
-  if(!confirm('¿Seguro que deseas revertir la dispersión de esta solicitud?'))return
-  const{error}=await sb.from('presupuestos').update({
-    estado_dispersion:'pendiente',
-    fecha_dispersado:null,
-    dispersado_por:null
-  }).eq('id',id)
+  if(!confirm('¿Revertir TODAS las dispersiones de esta solicitud? Esta acción no se puede deshacer.'))return
+  await sb.from('dispersiones').delete().eq('presupuesto_id',id)
+  const{error}=await sb.from('presupuestos').update({estado_dispersion:'pendiente',fecha_dispersado:null,dispersado_por:null}).eq('id',id)
   if(error){alert('Error al revertir: '+error.message);return}
   await loadAll()
 }
@@ -810,8 +835,8 @@ function xlsxAprobacion(){
   if(S.afed)data=data.filter(r=>(r.estado_dispersion||'pendiente')===S.afed)
   data=[...data].sort((a,b)=>(!a.fecha_dispersion&&!b.fecha_dispersion)?0:!a.fecha_dispersion?1:!b.fecha_dispersion?-1:a.fecha_dispersion<b.fecha_dispersion?-1:1)
   xlsxDown('aprobacion'+(S.afe?'_'+S.afe:'')+'.xlsx',
-    ['Semana','Mes','Técnico','Zona','UDN','Coordinador','Ruta','Concepto','Monto','Estado','Dispersión','Fecha disp.','Fecha inicio viaje','Fecha fin viaje','Comentarios'],
-    data.map(r=>[r.semana,r.mes,r.tecnico_nombre,r.zona,r.udn||'',r.coordinador||'',r.ruta||'',r.concepto,r.monto,r.estado,r.estado_dispersion||'pendiente',r.fecha_dispersion||'',r.fecha_inicio_viaje||'',r.fecha_fin_viaje||'',r.comentarios||''])
+    ['Semana','Mes','Técnico','Zona','UDN','Coordinador','Ruta','Concepto','Monto autorizado','Estado','Estado dispersión','Total dispersado','Saldo pendiente','Fecha necesidad','Fecha inicio viaje','Fecha fin viaje','Comentarios'],
+    data.map(r=>[r.semana,r.mes,r.tecnico_nombre,r.zona,r.udn||'',r.coordinador||'',r.ruta||'',r.concepto,r.monto,r.estado,r.estado_dispersion||'pendiente',getTotalDisp(r.id),getSaldoPend(r),r.fecha_dispersion||'',r.fecha_inicio_viaje||'',r.fecha_fin_viaje||'',r.comentarios||''])
   )
 }
 function xlsxComparativo(){
@@ -1182,7 +1207,7 @@ function pAprobacion(){
   const pend=S.presupuestos.filter(r=>r.estado==='PENDIENTE').length
   const apro=S.presupuestos.filter(r=>r.estado==='APROBADO').length
   const rech=S.presupuestos.filter(r=>r.estado==='RECHAZADO').length
-  const porDispersar=S.presupuestos.filter(r=>r.estado==='APROBADO'&&(r.estado_dispersion||'pendiente')==='pendiente').length
+  const porDispersar=S.presupuestos.filter(r=>r.estado==='APROBADO'&&['pendiente','parcial'].includes(r.estado_dispersion||'pendiente')).length
   const sel=S.sel
   const totSel=Array.from(sel).reduce((a,id)=>{const r=S.presupuestos.find(r=>r.id===id);return a+(r?r.monto:0)},0)
   const esAdmin=S.perfil&&S.perfil.rol==='admin'
@@ -1201,7 +1226,7 @@ function pAprobacion(){
     '<input class="fin" placeholder="Buscar técnico..." value="'+(S.afb||'')+'" onchange="S.afb=this.value;render()">'+
     '<input type="date" class="fin" title="Desde" value="'+(S.afd_desde||'')+'" onchange="S.afd_desde=this.value;render()" style="width:150px">'+
     '<input type="date" class="fin" title="Hasta" value="'+(S.afd_hasta||'')+'" onchange="S.afd_hasta=this.value;render()" style="width:150px">'+
-    '<select class="fs" onchange="S.afed=this.value;render()"><option value="">Todas las dispersiones</option><option value="pendiente"'+(S.afed==='pendiente'?' selected':'')+'>Pendiente dispersión</option><option value="dispersado"'+(S.afed==='dispersado'?' selected':'')+'>Dispersado</option></select>'+
+    '<select class="fs" onchange="S.afed=this.value;render()"><option value="">Todas las dispersiones</option><option value="pendiente"'+(S.afed==='pendiente'?' selected':'')+'>Sin dispersar</option><option value="parcial"'+(S.afed==='parcial'?' selected':'')+'>Parcialmente dispersado</option><option value="dispersado"'+(S.afed==='dispersado'?' selected':'')+'>Dispersado</option></select>'+
     (S.perfil&&['admin','supervisor'].includes(S.perfil.rol)?'<button class="btn btn-sm" onclick="xlsxAprobacion()" style="border-color:#BBF7D0;color:#15803D;font-weight:600;margin-left:4px">📊 Descargar Excel</button>':'')+
     '</div>'+
     (sel.size>0?'<div class="abar">'+
@@ -1232,7 +1257,11 @@ function pAprobacion(){
     '</tr></thead><tbody>'+
     (data.length?data.map(r=>{
       const estaDisp=r.estado_dispersion==='dispersado'
+      const estaParcial=r.estado_dispersion==='parcial'
       const fechaDisp=r.fecha_dispersado?new Date(r.fecha_dispersado).toLocaleDateString('es-MX'):''
+      const totalDisp=getTotalDisp(r.id)
+      const saldoPend=getSaldoPend(r)
+      const histDisp=(S.dispersiones||[]).filter(d=>d.presupuesto_id===r.id)
       return '<tr>'+
         '<td>'+(r.estado==='PENDIENTE'?'<input type="checkbox"'+(sel.has(r.id)?' checked':'')+' onchange="S.sel[this.checked?\'add\':\'delete\'](\''+ r.id +'\');render()">':'')+'</td>'+
         '<td style="font-weight:600">'+r.tecnico_nombre+'</td>'+
@@ -1247,20 +1276,61 @@ function pAprobacion(){
         '<td style="text-align:right;font-weight:600">'+fmt(r.monto)+'</td>'+
         '<td style="text-align:right">'+(r.estado==='PENDIENTE'?'<input type="number" id="me-'+r.id+'" value="'+r.monto+'" min="0" step="1" style="width:90px;padding:3px 6px;border:1.5px solid #BFDBFE;border-radius:6px;font-size:12px;text-align:right;font-weight:600">':fmt(r.monto))+'</td>'+
         '<td>'+be(r.estado)+'</td>'+
-        '<td style="white-space:nowrap">'+(r.estado==='PENDIENTE'?
+        '<td>'+(r.estado==='PENDIENTE'?
           '<button class="btn btn-xs" style="color:var(--green);border-color:#BBF7D0;margin-right:4px" onclick="iniciarAprobacion(\''+ r.id +'\')">✓</button>'+
           '<button class="btn btn-xs" style="color:var(--red);border-color:#FECACA" onclick="setEstado(\''+ r.id +'\',\'RECHAZADO\',\'\')">✕</button>':
           r.estado==='APROBADO'?
-            (estaDisp?
-              '<span class="badge" style="background:#F3F4F6;color:var(--g600);border:1px solid var(--g200);font-size:11px">Dispersado ✓'+(fechaDisp?' · '+fechaDisp:'')+'</span>'+
-              ' <button class="btn btn-xs" style="color:var(--red);background:#FEF2F2;border-color:#FECACA;margin-left:4px" onclick="revertirDispersion(\''+ r.id +'\')">Revertir</button>':
-              '<button class="btn btn-xs" style="color:var(--green);background:#F0FDF4;border-color:#BBF7D0;font-weight:600" onclick="dispersar(\''+ r.id +'\')">$ Dispersar</button>'
-            ):
+            '<div style="display:flex;flex-direction:column;gap:4px;min-width:175px">'+
+            '<div style="font-size:10px;color:var(--g600)">Auth: <b>'+fmt(r.monto)+'</b> · Disp: <b style="color:'+(totalDisp>0?'#15803D':'var(--g400)')+'">'+fmt(totalDisp)+'</b> · Saldo: <b style="color:'+(saldoPend>0?'var(--amber)':'#15803D')+'">'+fmt(saldoPend)+'</b></div>'+
+            (estaDisp?'<span class="badge ba" style="font-size:10px">✓ Dispersado'+(fechaDisp?' · '+fechaDisp:'')+'</span>':estaParcial?'<span class="badge bp" style="font-size:10px">◑ Parcialmente dispersado</span>':'<span class="badge bz" style="font-size:10px">Sin dispersar</span>')+
+            '<div style="display:flex;gap:3px;flex-wrap:wrap">'+
+            (S.perfil&&['admin','supervisor'].includes(S.perfil.rol)&&saldoPend>0.01?'<button class="btn btn-xs" style="color:#15803D;background:#F0FDF4;border-color:#BBF7D0;font-weight:600" onclick="abrirDispModal(\''+r.id+'\')">💸 Dispersar</button>':'')+
+            '<button class="btn btn-xs" style="color:var(--navy);border-color:var(--navyL)" onclick="S.dispHistorial=S.dispHistorial===\''+r.id+'\'?null:\''+r.id+'\';render()">'+(S.dispHistorial===r.id?'▲ Cerrar':'📋 Historial')+'</button>'+
+            (esAdmin?'<button class="btn btn-xs" style="color:var(--red);background:#FEF2F2;border-color:#FECACA" onclick="revertirDispersion(\''+r.id+'\')" title="Revertir todas las dispersiones">↩</button>':'')+
+            '</div></div>':
             '<span style="font-size:11px;color:var(--g400)">Procesado</span>')+
         (esAdmin?' <button class="btn btn-xs" style="color:var(--red);background:#FFF1F2;border-color:#FECACA;margin-left:6px" onclick="eliminarSolicitud(\''+r.id+'\')" title="Eliminar solicitud">🗑</button>':'')+
-        '</td></tr>'
+        '</td></tr>'+
+        (S.dispHistorial===r.id?
+          '<tr style="background:var(--navyXL)"><td colspan="14" style="padding:10px 16px">'+
+          '<div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:8px">📋 Historial de dispersiones — '+r.tecnico_nombre+' · '+r.concepto+'</div>'+
+          (histDisp.length===0?'<p style="font-size:12px;color:var(--g400)">Sin dispersiones registradas aún</p>':
+            '<table style="border-collapse:collapse;font-size:11px"><thead><tr>'+
+            '<th style="padding:4px 10px;background:#BFDBFE;border:1px solid #93C5FD;color:var(--navy)">Fecha</th>'+
+            '<th style="padding:4px 10px;background:#BFDBFE;border:1px solid #93C5FD;color:var(--navy);text-align:right">Monto</th>'+
+            '<th style="padding:4px 10px;background:#BFDBFE;border:1px solid #93C5FD;color:var(--navy)">Registrado por</th>'+
+            '<th style="padding:4px 10px;background:#BFDBFE;border:1px solid #93C5FD;color:var(--navy)">Nota</th>'+
+            '</tr></thead><tbody>'+
+            histDisp.map(d=>'<tr><td style="padding:4px 10px;border:1px solid #DBEAFE">'+d.fecha+'</td><td style="padding:4px 10px;border:1px solid #DBEAFE;text-align:right;font-weight:700;color:#15803D">'+fmt(d.monto)+'</td><td style="padding:4px 10px;border:1px solid #DBEAFE;color:var(--g600)">'+d.usuario_nombre+'</td><td style="padding:4px 10px;border:1px solid #DBEAFE;color:var(--g600);font-style:italic">'+(d.nota||'—')+'</td></tr>').join('')+
+            '</tbody></table>'+
+            '<div style="font-size:11px;font-weight:700;color:var(--navy);margin-top:8px">Total dispersado: '+fmt(totalDisp)+' · Saldo: <span style="color:'+(saldoPend>0?'var(--amber)':'#15803D')+'">'+fmt(saldoPend)+'</span></div>'
+          )+
+          '</td></tr>':'')
     }).join(''):'<tr><td colspan="14" class="empty">Sin registros</td></tr>')
-    '</tbody></table></div>'
+    '</tbody></table></div>'+
+    (S.dispModal?
+      '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);z-index:200;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)cerrarDispModal()">'+
+      '<div style="background:#fff;border-radius:16px;padding:28px 32px;width:460px;max-width:95vw;box-shadow:0 24px 64px rgba(0,0,0,.25)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">'+
+      '<div><div style="font-size:17px;font-weight:700;color:var(--navy)">Registrar Dispersión</div>'+
+      '<div style="font-size:12px;color:var(--g600);margin-top:3px">'+S.dispModal.tecnico+'</div></div>'+
+      '<button onclick="cerrarDispModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--g400);line-height:1">✕</button>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;background:var(--navyXL);border:1px solid var(--navyL);border-radius:10px;padding:14px;margin-bottom:20px">'+
+      '<div style="text-align:center"><div style="font-size:9px;color:var(--g400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Autorizado</div><div style="font-size:16px;font-weight:700;color:var(--navy)">'+fmt(S.dispModal.montoTotal)+'</div></div>'+
+      '<div style="text-align:center"><div style="font-size:9px;color:var(--g400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Ya dispersado</div><div style="font-size:16px;font-weight:700;color:#15803D">'+fmt(S.dispModal.totalDisp)+'</div></div>'+
+      '<div style="text-align:center"><div style="font-size:9px;color:var(--g400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Saldo</div><div style="font-size:16px;font-weight:700;color:var(--amber)">'+fmt(S.dispModal.saldo)+'</div></div>'+
+      '</div>'+
+      '<div class="fg"><label class="fl" style="color:var(--red)">Monto a dispersar *</label>'+
+      '<input type="number" class="fi" min="1" max="'+S.dispModal.saldo+'" step="1" value="'+S.dispModal.monto+'" oninput="S.dispModal.monto=this.value" style="font-size:16px;font-weight:700;color:var(--navy)" placeholder="0"></div>'+
+      '<div class="fg"><label class="fl" style="color:var(--red)">Fecha de dispersión *</label>'+
+      '<input type="date" class="fi" value="'+S.dispModal.fecha+'" onchange="S.dispModal.fecha=this.value"></div>'+
+      '<div class="fg"><label class="fl">Nota (opcional)</label>'+
+      '<input class="fi" placeholder="Ej. Transferencia SPEI #12345..." value="'+(S.dispModal.nota||'')+'" oninput="S.dispModal.nota=this.value"></div>'+
+      '<div style="display:flex;gap:10px">'+
+      '<button class="btn btn-g" style="flex:1;padding:12px;font-size:14px;font-weight:600" onclick="guardarDispersion()">✓ Confirmar dispersión</button>'+
+      '<button class="btn" style="padding:12px" onclick="cerrarDispModal()">Cancelar</button>'+
+      '</div></div></div>':'')
 }
 
 function pComparativo(){
@@ -1591,10 +1661,14 @@ function pMisSolicitudes(){
     '<table><thead><tr><th>Sem</th><th>Mes</th><th>Técnico</th><th>Ruta</th><th>Concepto</th><th style="text-align:right">Monto</th><th>Estado</th><th>Dispersión</th><th></th></tr></thead><tbody>'+
     (mis.length?mis.map(r=>{
       const estaDisp=r.estado_dispersion==='dispersado'
+      const estaParcial=r.estado_dispersion==='parcial'
       const fechaDisp=r.fecha_dispersado?new Date(r.fecha_dispersado).toLocaleDateString('es-MX'):''
+      const totalDispR=getTotalDisp(r.id)
       const badgeDisp=r.estado==='APROBADO'?(
         estaDisp?
-          '<span class="badge ba" style="font-size:11px">Dispersado ✓'+(fechaDisp?' · '+fechaDisp:'')+'</span>':
+          '<span class="badge ba" style="font-size:11px">✓ Dispersado'+(fechaDisp?' · '+fechaDisp:'')+'</span>':
+        estaParcial?
+          '<span class="badge bp" style="font-size:11px">◑ Parcial · '+fmt(totalDispR)+' / '+fmt(r.monto)+'</span>':
           '<span class="badge" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;font-size:11px">Pendiente dispersión</span>'
       ):'<span style="color:var(--g400);font-size:11px">—</span>'
       return '<tr'+(S.editPres===r.id?' style="background:var(--navyXL)"':'')+'>'+
