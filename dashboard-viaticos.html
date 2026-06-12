@@ -799,6 +799,12 @@ function xlsxPorRuta(){
     Object.values(rv).sort((a,b)=>b.p-a.p).map(x=>[x.r,x.p,x.g,x.p-x.g,pct(x.g,x.p)+'%',x.n])
   )
 }
+function xlsxTecnicos(){
+  xlsxDown('tecnicos.xlsx',
+    ['Nombre','Zona','Ciudad','UDN','Coordinador','Región','Subsede','Estado Rep.','Activo'],
+    S.tecnicos.map(t=>[t.nombre,t.zona,t.ciudad||'',t.udn||'',t.coordinador||'',t.region||'',t.subsede||'',t.estado||'',t.activo?'Sí':'No'])
+  )
+}
 
 function sidebar(){
   const rol=S.perfil?S.perfil.rol:'coordinador'
@@ -1274,7 +1280,10 @@ function pTecnicos(){
   const _canCreateTec=S.perfil&&['admin','coordinador','supervisor'].includes(S.perfil.rol)
   return '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">'+
     '<div><div class="pg-t">Catálogo de técnicos</div><div style="font-size:13px;color:var(--g600);margin-top:3px">'+S.tecnicos.length+' técnicos registrados</div></div>'+
+    '<div style="display:flex;gap:8px;align-items:center">'+
+    (_canCreateTec?'<button class="btn btn-sm" onclick="xlsxTecnicos()" style="border-color:#BBF7D0;color:#15803D;font-weight:600">📊 Descargar Excel</button>':'')+
     (_canCreateTec?'<button class="btn btn-n" onclick="S.showNt2=!S.showNt2;S.editTec=null;S.editTecData={};render()">'+(S.showNt2?'✕ Cancelar':'+ Nuevo técnico')+'</button>':'')+
+    '</div>'+
     '</div>'+
     (S.nt2Msg?'<div class="'+(S.nt2Msg.t==='o'?'ok-msg':'err-msg')+'" style="margin-bottom:16px">'+S.nt2Msg.m+'</div>':'')+
     (S.showNt2&&_canCreateTec?'<div class="card" style="margin-bottom:20px"><div class="ct" style="margin-bottom:14px">Nuevo técnico</div>'+
