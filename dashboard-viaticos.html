@@ -308,7 +308,7 @@ async function confirmarAprobacion(){
     alert('El motivo del ajuste es obligatorio cuando el monto cambia')
     return
   }
-  const upd={estado:'APROBADO',monto:a.montoAprobado}
+  const upd={estado:'APROBADO',monto:a.montoAprobado,monto_solicitado:a.montoOriginal}
   if(S.motivoAprobacion.trim())upd.comentario_aprobacion=S.motivoAprobacion.trim()
   const{error}=await sb.from('presupuestos').update(upd).eq('id',a.id)
   if(error){alert('Error: '+error.message);return}
@@ -323,7 +323,7 @@ async function confirmarAprobacion(){
 }
 
 function getTotalDisp(pid){
-  return(S.dispersiones||[]).filter(d=>d.presupuesto_id===pid).reduce((a,d)=>a+(d.monto||0),0)
+  return(S.dispersiones||[]).filter(d=>d.presupuesto_id===pid).reduce((a,d)=>a+(d.monto_dispersado||0),0)
 }
 function getSaldoPend(r){
   return Math.max(0,(r.monto||0)-getTotalDisp(r.id))
@@ -333,7 +333,7 @@ function abrirDispModal(id){
   if(!r)return
   const totalDisp=getTotalDisp(id)
   const saldo=getSaldoPend(r)
-  S.dispModal={pid:id,tecnico:r.tecnico_nombre,montoTotal:r.monto,totalDisp,saldo,monto:String(Math.round(saldo)),fecha:new Date().toISOString().split('T')[0],nota:''}
+  S.dispModal={pid:id,tecnico:r.tecnico_nombre,montoTotal:r.monto,montoSolicitado:r.monto_solicitado??r.monto,montoAutorizado:r.monto,totalDisp,saldo,monto:String(Math.round(saldo)),fecha:new Date().toISOString().split('T')[0],nota:'',motivoAjuste:''}
   render()
 }
 function cerrarDispModal(){S.dispModal=null;render()}
@@ -345,7 +345,7 @@ async function guardarDispersion(){
   if(monto>m.saldo+0.01){alert('El monto ('+fmt(monto)+') excede el saldo pendiente ('+fmt(m.saldo)+')');return}
   if(!m.fecha){alert('Selecciona la fecha de dispersión');return}
   const{data:{user}}=await sb.auth.getUser()
-  const{error}=await sb.from('dispersiones').insert([{presupuesto_id:m.pid,monto,fecha:m.fecha,usuario_id:user.id,usuario_nombre:S.perfil?S.perfil.nombre:'',nota:m.nota||null}])
+  const{error}=await sb.from('dispersiones').insert([{presupuesto_id:m.pid,monto_dispersado:monto,monto_solicitado:m.montoSolicitado,monto_autorizado:m.montoAutorizado,motivo_ajuste:m.motivoAjuste||null,fecha:m.fecha,usuario_id:user.id,usuario_nombre:S.perfil?S.perfil.nombre:'',nota:m.nota||null}])
   if(error){alert('Error al guardar dispersión: '+error.message);return}
   const nuevoTotal=m.totalDisp+monto
   const nuevoEst=nuevoTotal>=m.montoTotal-0.01?'dispersado':'parcial'
@@ -1325,6 +1325,8 @@ function pAprobacion(){
       '<input type="number" class="fi" min="1" max="'+S.dispModal.saldo+'" step="1" value="'+S.dispModal.monto+'" oninput="S.dispModal.monto=this.value" style="font-size:16px;font-weight:700;color:var(--navy)" placeholder="0"></div>'+
       '<div class="fg"><label class="fl" style="color:var(--red)">Fecha de dispersión *</label>'+
       '<input type="date" class="fi" value="'+S.dispModal.fecha+'" onchange="S.dispModal.fecha=this.value"></div>'+
+      '<div class="fg"><label class="fl">Motivo del ajuste (si autorizado ≠ solicitado)</label>'+
+      '<input class="fi" placeholder="Ej. Se redujo por falta de comprobantes..." value="'+(S.dispModal.motivoAjuste||'')+'" oninput="S.dispModal.motivoAjuste=this.value"></div>'+
       '<div class="fg"><label class="fl">Nota (opcional)</label>'+
       '<input class="fi" placeholder="Ej. Transferencia SPEI #12345..." value="'+(S.dispModal.nota||'')+'" oninput="S.dispModal.nota=this.value"></div>'+
       '<div style="display:flex;gap:10px">'+
