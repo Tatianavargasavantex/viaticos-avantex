@@ -124,7 +124,7 @@ const SB_URL='https://qyzlzfagdqkpczifnphd.supabase.co'
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5emx6ZmFnZHFrcGN6aWZucGhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MDA5NDEsImV4cCI6MjA5MjM3Njk0MX0.dRSGryVUK7aCIlUFP5wkj8put_Mkoc8mWZYd83Slzt4'
 const sb=supabase.createClient(SB_URL,SB_KEY)
 
-const ZONAS=['MATRIZ', 'CDMX', 'FORANEOS', 'SURESTE', 'BAJIO']
+const ZONAS=['MATRIZ', 'BAJIO', 'SURESTE', 'CENTRO', 'NOROESTE', 'PACIFICO']
 const MESES=['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
 const UDNS=['AROMATEX', 'PESTEX', 'AROMATEX/PESTEX', 'INTENDENCIA', 'WELDEX', 'AROMATEX HOME', 'AVANTEX', 'FLOTILLAS', 'EXTERNO']
 const CONCEPTOS=['COMBUSTIBLE', 'PEAJE Y ESTACIONAMIENTO', 'HOSPEDAJE', 'TRANSPORTACIONES', 'VIAJE', 'MATERIALES', 'CONSUMO', 'EPP', 'TELEFONOS', 'PAPELERIA', 'INSUMOS AROMATEX', 'INSUMOS PESTEX', 'MANTENIMIENTO DE AUTO', 'RENTA CARRO', 'UNIFORMES', 'OTROS GASTOS']
@@ -139,7 +139,7 @@ let S={
   afe:'PENDIENTE',afz:'',afb:'',afn:'',afd_desde:(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1).toISOString().split('T')[0]})(),afd_hasta:(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().split('T')[0]})(),afed:'',
   f2:{zona:'',tecnico:'',coordinador:'',concepto:'',mes:''},
   lineas:[],capMsg:null,
-  cap:(()=>{const _h=new Date(),_d=_h.getDate(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tipo:'PRESUPUESTADO',tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),
+  cap:(()=>{const{semana,mes,anio}=semanaMesHoy();return{semana,mes,anio,tipo:'PRESUPUESTADO',tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),
   zf:'',bf:'',nszf:'',nsbf:'',
   nu:{email:'',nombre:'',rol:'coordinador',zona:''},nuMsg:null,showNu:false,
   tb:'',
@@ -152,7 +152,7 @@ let S={
   chSel:new Set(),
   chAfe:'PENDIENTE',
   chOpen:false,
-  ns:(()=>{const _h=new Date(),_meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return{semana:Math.ceil(_h.getDate()/7),mes:_meses[_h.getMonth()],anio:_h.getFullYear(),tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),nsMsg:null,
+  ns:(()=>{const{semana,mes,anio}=semanaMesHoy();return{semana,mes,anio,tid:'',nota:'',fecha_dispersion:'',fecha_inicio_viaje:'',fecha_fin_viaje:'',ruta:''};})(),nsMsg:null,
   capf:{estado:'',mes:(()=>{const _h=new Date(),_m=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];return _m[_h.getMonth()]})(),semana:''},
   msf:{mes:'',estado:''},
   editPres:null,editPresData:{},
@@ -185,21 +185,50 @@ function filBanco(arr){
   )
 }
 
+function esSemanaNuevaLogica(anio,mesIdx){ return anio>2026 || (anio===2026 && mesIdx>=7) }
+
 function semanasDelMes(mes,anio){
-  const mi=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'].indexOf(mes)
+  const MI=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE']
+  const mi=MI.indexOf(mes)
   if(mi<0)return[{n:1,d:1,h:7},{n:2,d:8,h:14},{n:3,d:15,h:21},{n:4,d:22,h:28}]
-  const dias=new Date(anio,mi+1,0).getDate()
-  const ss=[{n:1,d:1,h:7},{n:2,d:8,h:14},{n:3,d:15,h:21},{n:4,d:22,h:Math.min(28,dias)}]
-  if(dias>28)ss.push({n:5,d:29,h:dias})
+  if(!esSemanaNuevaLogica(anio,mi)){
+    const dias=new Date(anio,mi+1,0).getDate()
+    const ss=[{n:1,d:1,h:7},{n:2,d:8,h:14},{n:3,d:15,h:21},{n:4,d:22,h:Math.min(28,dias)}]
+    if(dias>28)ss.push({n:5,d:29,h:dias})
+    return ss
+  }
+  const last=new Date(anio,mi+1,0)
+  let d=new Date(anio,mi,1)
+  while(d.getDay()!==0)d.setDate(d.getDate()+1)
+  const ss=[];let n=1
+  while(d<=last){
+    const dom=new Date(d),lun=new Date(d);lun.setDate(lun.getDate()-6)
+    ss.push({n,dFull:lun,hFull:dom});n++;d.setDate(d.getDate()+7)
+  }
   return ss
 }
 function labelSem(n,mes,anio){
   const mn=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
-  const mi=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'].indexOf(mes)
-  const nm=mi>=0?mn[mi]:''
+  const MI=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE']
   const s=semanasDelMes(mes,anio).find(x=>x.n===n)
   if(!s)return'S'+n
-  return'S'+n+': '+s.d+' '+nm+' — '+s.h+' '+nm
+  if(s.dFull)return'S'+n+': '+s.dFull.getDate()+' '+mn[s.dFull.getMonth()]+' — '+s.hFull.getDate()+' '+mn[s.hFull.getMonth()]
+  const mi=MI.indexOf(mes)
+  return'S'+n+': '+s.d+' '+mn[mi]+' — '+s.h+' '+mn[mi]
+}
+function semanaMesHoy(){
+  const MESES=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE']
+  const hoy=new Date();hoy.setHours(0,0,0,0)
+  for(const off of [0,1]){
+    const d=new Date(hoy.getFullYear(),hoy.getMonth()+off,1)
+    const mes=MESES[d.getMonth()],anio=d.getFullYear()
+    const match=semanasDelMes(mes,anio).find(s=>s.dFull
+      ? (hoy>=s.dFull&&hoy<=s.hFull)
+      : (hoy>=new Date(anio,MESES.indexOf(mes),s.d)&&hoy<=new Date(anio,MESES.indexOf(mes),s.h)))
+    if(match)return{semana:match.n,mes,anio}
+  }
+  const _d=hoy.getDate()
+  return{semana:_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5,mes:MESES[hoy.getMonth()],anio:hoy.getFullYear()}
 }
 
 async function fetchAll(queryFn){
@@ -457,11 +486,7 @@ async function generarPresupuestosFijos(){
   S.generandoFijos=true
   S.capMsg={t:'o',m:'Generando presupuestos fijos...'}
   render()
-  const _h=new Date(),_d=_h.getDate()
-  const _meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE']
-  const semana=_d<=7?1:_d<=14?2:_d<=21?3:_d<=28?4:5
-  const mes=_meses[_h.getMonth()]
-  const anio=2026
+  const{semana,mes,anio}=semanaMesHoy()
   const{data:fijos,error:ef}=await sb.from('presupuestos_fijos').select('*').eq('activo',true)
   if(ef){S.capMsg={t:'e',m:'Error leyendo fijos: '+ef.message};S.generandoFijos=false;render();return}
   if(!fijos||fijos.length===0){S.capMsg={t:'e',m:'No hay presupuestos fijos activos.'};S.generandoFijos=false;render();return}
@@ -1819,8 +1844,8 @@ function initResumenCharts(){
   const c1=document.getElementById('ch-meses')
   if(c1)_charts.meses=new Chart(c1,{type:'bar',data:{labels:MALL.map(m=>m.slice(0,3)),datasets:[{label:'Presupuesto',data:MALL.map(m=>aP[m]||0),backgroundColor:'#BFDBFE',borderColor:'#3B82F6',borderWidth:1,borderRadius:3},{label:'Gasto',data:MALL.map(m=>aG[m]||0),backgroundColor:'#002B5C',borderColor:'#002B5C',borderWidth:1,borderRadius:3}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}}},scales:{y:{ticks:{callback:tickFmt,font:{size:9}},grid:{color:gridColor}},x:{ticks:{font:{size:9}},grid:{display:false}}}}})
   const zonaG={};S.banco.forEach(r=>{if(r.zona)zonaG[r.zona]=(zonaG[r.zona]||0)+(r.monto||0)})
-  const zOrd=['MATRIZ','CDMX','FORANEOS','SURESTE','BAJIO']
-  const zColors=['#002B5C','#0066CC','#15803D','#B45309','#DC2626']
+  const zOrd=['MATRIZ','BAJIO','SURESTE','CENTRO','NOROESTE','PACIFICO']
+  const zColors=['#002B5C','#0066CC','#15803D','#B45309','#DC2626','#7C3AED']
   const c2=document.getElementById('ch-zonas')
   if(c2)_charts.zonas=new Chart(c2,{type:'doughnut',data:{labels:zOrd,datasets:[{data:zOrd.map(z=>zonaG[z]||0),backgroundColor:zColors,borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}}}}})
   const tecG={};S.banco.forEach(r=>{if(r.tecnico_nombre)tecG[r.tecnico_nombre]=(tecG[r.tecnico_nombre]||0)+(r.monto||0)})
