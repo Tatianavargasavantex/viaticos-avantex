@@ -248,7 +248,7 @@ async function fetchAll(queryFn){
 async function loadAll(){
   S.loading=true;render()
   const esCoord=S.perfil&&S.perfil.rol==='coordinador'
-  let tecQuery=sb.from('tecnicos').select('*').eq('activo',true).order('nombre')
+  let tecQuery=sb.from('tecnicos').select('*,subsede:subsede_operativa,estado:estado_republica').eq('activo',true).order('nombre')
   if(esCoord&&S.perfil.nombre)tecQuery=tecQuery.ilike('coordinador',S.perfil.nombre)
   const[t,u,rv]=await Promise.all([
     tecQuery,
@@ -533,7 +533,7 @@ async function guardarNuevoTecnico(){
   const subsede=document.getElementById('nt-subsede').value.trim().toUpperCase()
   const estado=document.getElementById('nt-estado').value.trim().toUpperCase()
   if(!nombre||!zona){alert('Ingresa nombre y zona');return}
-  const{data,error}=await sb.from('tecnicos').insert({nombre,zona,ciudad,udn,coordinador,region,subsede,estado,activo:true}).select().single()
+  const{data,error}=await sb.from('tecnicos').insert({nombre,zona,ciudad,udn,coordinador,region,subsede_operativa:subsede,estado_republica:estado,activo:true}).select().single()
   if(error){alert('Error: '+error.message);return}
   await loadAll()
   S.cap.tid=data.id
@@ -547,7 +547,7 @@ async function setRol(id,rol){await sb.from('perfiles').update({rol}).eq('id',id
 async function guardarTecnicoDesdeAdmin(){
   const n=S.nt2
   if(!n.nombre||!n.zona){alert('Ingresa nombre y zona');return}
-  const{error}=await sb.from('tecnicos').insert({nombre:n.nombre,zona:n.zona,ciudad:n.ciudad,udn:n.udn,coordinador:n.coordinador,region:n.region,subsede:n.subsede,estado:n.estado,activo:true})
+  const{error}=await sb.from('tecnicos').insert({nombre:n.nombre,zona:n.zona,ciudad:n.ciudad,udn:n.udn,coordinador:n.coordinador,region:n.region,subsede_operativa:n.subsede,estado_republica:n.estado,activo:true})
   if(error){S.nt2Msg={t:'e',m:error.message};render();return}
   S.nt2Msg={t:'o',m:'Técnico registrado correctamente'}
   S.nt2={nombre:'',zona:'',ciudad:'',udn:'',coordinador:'',region:'',subsede:'',estado:''};S.showNt2=false
@@ -563,7 +563,7 @@ function editarTecnico(id){
 
 async function guardarEditTecnico(){
   const d=S.editTecData
-  const{error}=await sb.from('tecnicos').update({nombre:d.nombre,zona:d.zona,ciudad:d.ciudad||'',udn:d.udn||'',coordinador:d.coordinador||'',region:d.region||'',subsede:d.subsede||'',activo:d.activo}).eq('id',S.editTec)
+  const{error}=await sb.from('tecnicos').update({nombre:d.nombre,zona:d.zona,ciudad:d.ciudad||'',udn:d.udn||'',coordinador:d.coordinador||'',region:d.region||'',subsede_operativa:d.subsede||'',estado_republica:d.estado||'',activo:d.activo}).eq('id',S.editTec)
   if(error){alert('Error: '+error.message);return}
   S.editTec=null;S.editTecData={}
   await loadAll()
